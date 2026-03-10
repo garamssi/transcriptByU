@@ -1,0 +1,27 @@
+.udemy-translator-text {
+  display: block;
+  margin-top: 4px;
+  padding: 2px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.udemy-translator-text.loading {
+  color: #999 !important;
+  font-style: italic;
+  background-color: transparent !important;
+  animation: loading-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes loading-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.udemy-translator-text.error {
+  color: #e74c3c !important;
+  font-size: 12px;
+  background-color: transparent !important;
+}
