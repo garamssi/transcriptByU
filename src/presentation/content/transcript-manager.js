@@ -1,4 +1,4 @@
-import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR, STORAGE_KEYS } from '../../domain/constants.js';
+import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR, STORAGE_KEYS, CHUNK_SIZE, OLLAMA_CHUNK_SIZE } from '../../domain/constants.js';
 import { errorToMessage } from '../../domain/error-messages.js';
 import { currentStyle } from './style-manager.js';
 import { replaceCaptionText } from './caption-manager.js';
@@ -158,13 +158,57 @@ function applyErrorToAll(cueItems, error) {
   observerPaused = false;
 }
 
-// === 핵심: 중복 제거 후 배치 번역 ===
+// === 텍스트→큐 매핑 구축 (동일 텍스트가 여러 큐에 있을 수 있음) ===
+function buildTextToCueMap(cueItems) {
+  const map = new Map();
+  for (const item of cueItems) {
+    if (!map.has(item.text)) map.set(item.text, []);
+    map.get(item.text).push(item);
+  }
+  return map;
+}
+
+// === 청크 단위 결과를 즉시 DOM에 반영 ===
+function applyChunkResults(chunkTexts, response, textToCues) {
+  if (!response || response.error) {
+    const errMsg = errorToMessage(response?.error || 'UNKNOWN');
+    observerPaused = true;
+    for (const text of chunkTexts) {
+      for (const { textSpan, container } of (textToCues.get(text) || [])) {
+        applyError(textSpan, container, errMsg);
+      }
+    }
+    observerPaused = false;
+    return;
+  }
+
+  const results = response.results || [];
+  observerPaused = true;
+  for (let i = 0; i < chunkTexts.length; i++) {
+    const result = results[i];
+    for (const { textSpan, container } of (textToCues.get(chunkTexts[i]) || [])) {
+      if (result?.translation) {
+        applyTranslation(textSpan, container, result.translation);
+      } else {
+        applyError(textSpan, container, errorToMessage(result?.error));
+      }
+    }
+  }
+  observerPaused = false;
+
+  // 캡션도 즉시 갱신
+  const captionEl = document.querySelector(CAPTION_SELECTOR);
+  if (captionEl) replaceCaptionText(captionEl);
+}
+
+// === 핵심: 청크 단위 비동기 번역 (먼저 온 결과부터 DOM 반영) ===
 async function translateAllCues(panel) {
   if (isBatchTranslating) return;
   isBatchTranslating = true;
 
   const cueItems = collectCues(panel);
   const untranslated = getUntranslatedCues(cueItems);
+  console.log(`[UdemyTranslator] translateAllCues: total=${cueItems.length}, untranslated=${untranslated.length}`);
 
   if (untranslated.length === 0) {
     isBatchTranslating = false;
@@ -172,69 +216,52 @@ async function translateAllCues(panel) {
   }
 
   const uniqueTexts = [...new Set(untranslated.map(c => c.text))];
+  const textToCues = buildTextToCueMap(untranslated);
 
+  // 로딩 표시
   observerPaused = true;
   for (const { textSpan, container } of untranslated) {
     applyLoading(textSpan, container, '번역 중...');
   }
   observerPaused = false;
 
-  try {
-    const ctx = getLectureContext();
-    const response = await chrome.runtime.sendMessage({
-      type: 'TRANSLATE_BATCH',
-      texts: uniqueTexts,
-      lecture: ctx.lecture,
-      section: ctx.section
-    });
+  // 프로바이더에 따른 청크 사이즈 결정
+  const { provider } = await chrome.storage.local.get(STORAGE_KEYS.PROVIDER);
+  const chunkSize = (provider || 'ollama') === 'ollama' ? OLLAMA_CHUNK_SIZE : CHUNK_SIZE;
 
-    if (!response) {
-      isBatchTranslating = false;
-      return;
-    }
+  // 청크 분할
+  const chunks = [];
+  for (let i = 0; i < uniqueTexts.length; i += chunkSize) {
+    chunks.push(uniqueTexts.slice(i, i + chunkSize));
+  }
 
-    if (response.error) {
-      applyErrorToAll(untranslated, response.error);
-      isBatchTranslating = false;
-      return;
-    }
+  const ctx = getLectureContext();
+  console.log(`[UdemyTranslator] ${uniqueTexts.length} texts → ${chunks.length} chunks (size=${chunkSize})`);
 
-    const resultMap = new Map();
-    const results = response.results || [];
-    for (let i = 0; i < uniqueTexts.length; i++) {
-      resultMap.set(uniqueTexts[i], results[i] || { error: 'NO_RESULT' });
-    }
-
-    const firstError = results.find(r => r?.error);
-    if (firstError?.error === 'RATE_LIMIT') {
-      applyErrorToAll(untranslated, 'RATE_LIMIT');
-      isBatchTranslating = false;
-      return;
-    }
-
-    observerPaused = true;
-    for (const { text, textSpan, container } of untranslated) {
-      const result = resultMap.get(text);
-      if (result?.translation) {
-        applyTranslation(textSpan, container, result.translation);
-      } else {
-        applyError(textSpan, container, errorToMessage(result?.error));
+  // 청크별로 순차 전송, 결과 도착 즉시 DOM 반영
+  for (let idx = 0; idx < chunks.length; idx++) {
+    const chunk = chunks[idx];
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'TRANSLATE_BATCH',
+        texts: chunk,
+        lecture: ctx.lecture,
+        section: ctx.section
+      });
+      applyChunkResults(chunk, response, textToCues);
+      console.log(`[UdemyTranslator] Chunk ${idx + 1}/${chunks.length} applied`);
+    } catch (err) {
+      observerPaused = true;
+      for (const text of chunk) {
+        for (const { textSpan, container } of (textToCues.get(text) || [])) {
+          applyError(textSpan, container, '⚠ 연결 오류');
+        }
       }
+      observerPaused = false;
     }
-    observerPaused = false;
-
-  } catch (err) {
-    observerPaused = true;
-    for (const { textSpan, container } of untranslated) {
-      applyError(textSpan, container, '⚠ 연결 오류');
-    }
-    observerPaused = false;
   }
 
   isBatchTranslating = false;
-
-  const captionEl = document.querySelector(CAPTION_SELECTOR);
-  if (captionEl) replaceCaptionText(captionEl);
 
   const remaining = getUntranslatedCues(collectCues(panel));
   if (remaining.length > 0) {
@@ -291,6 +318,7 @@ export function initPanelFinder() {
   currentPanel = null;
 
   const existing = document.querySelector(SELECTORS.panel);
+  console.log('[UdemyTranslator] initPanelFinder, panel:', existing ? 'FOUND' : 'NOT FOUND');
   if (existing) initPanel(existing);
 
   panelFinderObserver = new MutationObserver(() => {
@@ -321,8 +349,9 @@ export function removeAllTranslations() {
   observerPaused = false;
 }
 
-// === 전체 재번역 ===
+// === 전체 재번역 (청크 단위 비동기) ===
 export async function retranslateAll() {
+  console.log('[UdemyTranslator] retranslateAll() called');
   const panel = document.querySelector(SELECTORS.panel);
   if (!panel) return { count: 0 };
 
@@ -330,6 +359,7 @@ export async function retranslateAll() {
   if (cueItems.length === 0) return { count: 0 };
 
   const uniqueTexts = [...new Set(cueItems.map(c => c.text))];
+  const textToCues = buildTextToCueMap(cueItems);
 
   observerPaused = true;
   for (const { textSpan, container } of cueItems) {
@@ -337,53 +367,73 @@ export async function retranslateAll() {
   }
   observerPaused = false;
 
-  const { targetLang } = await chrome.storage.local.get(STORAGE_KEYS.TARGET_LANG);
-  const lang = targetLang || '한국어';
+  const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.PROVIDER]);
+  const lang = stored[STORAGE_KEYS.TARGET_LANG] || '한국어';
+  const provider = stored[STORAGE_KEYS.PROVIDER] || 'ollama';
+  const chunkSize = provider === 'ollama' ? OLLAMA_CHUNK_SIZE : CHUNK_SIZE;
   const ctx = getLectureContext();
 
-  try {
-    const response = await chrome.runtime.sendMessage({
-      type: 'RETRANSLATE_BATCH',
-      texts: uniqueTexts,
-      lang,
-      lecture: ctx.lecture,
-      section: ctx.section
-    });
-
-    if (response?.error) {
-      applyErrorToAll(cueItems, response.error);
-      return { count: 0 };
-    }
-
-    const retransMap = new Map();
-    const results = response?.results || [];
-    for (let i = 0; i < uniqueTexts.length; i++) {
-      if (results[i]?.translation) {
-        retransMap.set(uniqueTexts[i], results[i].translation);
-      }
-    }
-
-    let count = 0;
-    observerPaused = true;
-    for (const { text, textSpan, container } of cueItems) {
-      const translation = retransMap.get(text);
-      if (translation) {
-        applyTranslation(textSpan, container, translation);
-        count++;
-      } else {
-        applyError(textSpan, container, '⚠ 번역 오류');
-      }
-    }
-    observerPaused = false;
-
-    const captionEl = document.querySelector(CAPTION_SELECTOR);
-    if (captionEl) replaceCaptionText(captionEl);
-
-    return { count };
-  } catch (_) {
-    applyErrorToAll(cueItems, '연결 오류');
-    return { count: 0 };
+  const chunks = [];
+  for (let i = 0; i < uniqueTexts.length; i += chunkSize) {
+    chunks.push(uniqueTexts.slice(i, i + chunkSize));
   }
+
+  let count = 0;
+  for (let idx = 0; idx < chunks.length; idx++) {
+    const chunk = chunks[idx];
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'RETRANSLATE_BATCH',
+        texts: chunk,
+        lang,
+        lecture: ctx.lecture,
+        section: ctx.section
+      });
+
+      if (response?.error) {
+        const errMsg = errorToMessage(response.error);
+        observerPaused = true;
+        for (const text of chunk) {
+          for (const { textSpan, container } of (textToCues.get(text) || [])) {
+            applyError(textSpan, container, errMsg);
+          }
+        }
+        observerPaused = false;
+        continue;
+      }
+
+      const results = response?.results || [];
+      observerPaused = true;
+      for (let i = 0; i < chunk.length; i++) {
+        const result = results[i];
+        for (const { textSpan, container } of (textToCues.get(chunk[i]) || [])) {
+          if (result?.translation) {
+            applyTranslation(textSpan, container, result.translation);
+            count++;
+          } else {
+            applyError(textSpan, container, '⚠ 번역 오류');
+          }
+        }
+      }
+      observerPaused = false;
+
+      const captionEl = document.querySelector(CAPTION_SELECTOR);
+      if (captionEl) replaceCaptionText(captionEl);
+
+      console.log(`[UdemyTranslator] Retranslate chunk ${idx + 1}/${chunks.length} applied`);
+    } catch (err) {
+      observerPaused = true;
+      for (const text of chunk) {
+        for (const { textSpan, container } of (textToCues.get(text) || [])) {
+          applyError(textSpan, container, '⚠ 연결 오류');
+        }
+      }
+      observerPaused = false;
+    }
+  }
+
+  console.log(`[UdemyTranslator] retranslateAll: ${count} items translated`);
+  return { count };
 }
 
 // === Observer 정리 (네비게이션 시 호출) ===

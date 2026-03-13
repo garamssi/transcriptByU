@@ -1,4 +1,4 @@
-import { CHUNK_SIZE, DEFAULT_TARGET_LANG } from '../domain/constants.js';
+import { CHUNK_SIZE, OLLAMA_CHUNK_SIZE, DEFAULT_TARGET_LANG } from '../domain/constants.js';
 import { buildBatchSystemPrompt } from '../domain/prompt-builder.js';
 import { parseBatchResponse } from '../domain/response-parser.js';
 import { lectureCacheKey } from '../domain/cache-key.js';
@@ -61,15 +61,14 @@ export class TranslationService {
         }
       }
 
-      // 3) 미번역분: 중복 제거 후 청크 분할 API 호출
+      // 3) 미번역분: 중복 제거 후 API 호출
       if (uncachedIndices.length > 0) {
         const uniqueTexts = [...new Set(uncachedIndices.map(i => texts[i]))];
         const systemPrompt = buildBatchSystemPrompt(targetLang, context);
 
         try {
-          const newTranslations = await this._translateChunks(uniqueTexts, systemPrompt, provider, apiKey, model);
+          const newTranslations = await this._translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model);
 
-          // 결과 적용
           for (const i of uncachedIndices) {
             const translation = newTranslations[texts[i]];
             if (translation) {
@@ -79,7 +78,6 @@ export class TranslationService {
             }
           }
 
-          // 강의 캐시에 병합 저장
           if (Object.keys(newTranslations).length > 0) {
             Object.assign(lectureTranslations, newTranslations);
             this.l1Cache.set(lKey, lectureTranslations);
@@ -114,9 +112,8 @@ export class TranslationService {
       const uniqueTexts = [...new Set(texts)];
       const systemPrompt = buildBatchSystemPrompt(targetLang, context);
 
-      const translationMap = await this._translateChunks(uniqueTexts, systemPrompt, provider, apiKey, model);
+      const translationMap = await this._translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model);
 
-      // 결과 배열
       const results = new Array(texts.length).fill(null);
       for (let i = 0; i < texts.length; i++) {
         const translation = translationMap[texts[i]];
@@ -127,7 +124,6 @@ export class TranslationService {
         }
       }
 
-      // 강의 캐시 덮어쓰기
       if (Object.keys(translationMap).length > 0) {
         this.l1Cache.set(lKey, translationMap);
         await this.l2Cache.l2Set(lKey, translationMap);
@@ -140,28 +136,87 @@ export class TranslationService {
   }
 
   /**
-   * 텍스트 배열을 청크로 분할하여 API 호출 후 결과를 맵으로 반환
+   * 프로바이더별 번역 전략 분기
    * @private
    */
-  async _translateChunks(uniqueTexts, systemPrompt, provider, apiKey, model) {
+  async _translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model) {
+    if (provider === 'ollama') {
+      return this._translateOllama(uniqueTexts, systemPrompt, apiKey, model);
+    }
+    return this._translateCloud(uniqueTexts, systemPrompt, provider, apiKey, model);
+  }
+
+  /**
+   * Ollama 전략: 소청크, 딜레이 없음, 실패분 최대 2회 재시도
+   * @private
+   */
+  async _translateOllama(uniqueTexts, systemPrompt, apiKey, model) {
     const translationMap = {};
 
-    for (let start = 0; start < uniqueTexts.length; start += CHUNK_SIZE) {
-      const chunk = uniqueTexts.slice(start, start + CHUNK_SIZE);
-      const userText = chunk.map((t, j) => `${j + 1}|${t}`).join('\n');
-      const maxTokens = Math.max(4096, chunk.length * 200);
+    for (let start = 0; start < uniqueTexts.length; start += OLLAMA_CHUNK_SIZE) {
+      const chunk = uniqueTexts.slice(start, start + OLLAMA_CHUNK_SIZE);
+      const maxTokens = Math.max(4096, chunk.length * 400);
 
-      const responseText = await this.callApi(systemPrompt, userText, provider, apiKey, model, maxTokens);
-      const parsed = parseBatchResponse(responseText);
+      let remaining = chunk;
+      const maxRetries = 2;
 
-      for (let j = 0; j < chunk.length; j++) {
-        const translation = parsed.get(j + 1);
-        if (translation) {
-          translationMap[chunk[j]] = translation;
+      for (let attempt = 0; attempt <= maxRetries && remaining.length > 0; attempt++) {
+        if (attempt > 0) {
+          console.log(`[UdemyTranslator:Ollama] Retry ${attempt}/${maxRetries} for ${remaining.length} texts`);
         }
+
+        const failed = await this._translateAndParse(remaining, systemPrompt, 'ollama', apiKey, model, maxTokens, translationMap);
+        remaining = failed;
+      }
+
+      if (remaining.length > 0) {
+        console.warn(`[UdemyTranslator:Ollama] ${remaining.length} texts failed after retries`);
       }
     }
 
     return translationMap;
+  }
+
+  /**
+   * Cloud 전략 (Gemini/Claude): 대청크, 청크 간 1초 딜레이, 재시도 없음
+   * @private
+   */
+  async _translateCloud(uniqueTexts, systemPrompt, provider, apiKey, model) {
+    const translationMap = {};
+
+    for (let start = 0; start < uniqueTexts.length; start += CHUNK_SIZE) {
+      const chunk = uniqueTexts.slice(start, start + CHUNK_SIZE);
+      const maxTokens = Math.max(4096, chunk.length * 400);
+
+      // 청크 간 1초 딜레이 (rate limit 보호)
+      if (start > 0) await new Promise(r => setTimeout(r, 1000));
+
+      await this._translateAndParse(chunk, systemPrompt, provider, apiKey, model, maxTokens, translationMap);
+    }
+
+    return translationMap;
+  }
+
+  /**
+   * 청크를 번역하고 파싱, 실패한 원본 텍스트 배열 반환
+   * @private
+   */
+  async _translateAndParse(texts, systemPrompt, provider, apiKey, model, maxTokens, translationMap) {
+    const userText = texts.map((t, j) => `${j + 1}|${t}`).join('\n');
+    const responseText = await this.callApi(systemPrompt, userText, provider, apiKey, model, maxTokens);
+    console.log(`[UdemyTranslator:${provider}] Raw response:\n${responseText}`);
+    const parsed = parseBatchResponse(responseText, texts.length);
+    console.log(`[UdemyTranslator:${provider}] Parsed ${parsed.size}/${texts.length} lines`);
+
+    const failed = [];
+    for (let j = 0; j < texts.length; j++) {
+      const translation = parsed.get(j + 1);
+      if (translation) {
+        translationMap[texts[j]] = translation;
+      } else {
+        failed.push(texts[j]);
+      }
+    }
+    return failed;
   }
 }

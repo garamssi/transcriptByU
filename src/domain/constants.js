@@ -3,8 +3,12 @@ export const STORAGE_KEYS = {
   PROVIDER: 'provider',
   CLAUDE_API_KEY: 'claudeApiKey',
   GEMINI_API_KEY: 'geminiApiKey',
+  OLLAMA_URL: 'ollamaUrl',
   API_KEY: 'apiKey', // legacy
-  MODEL: 'model',
+  MODEL: 'model', // legacy
+  CLAUDE_MODEL: 'claudeModel',
+  GEMINI_MODEL: 'geminiModel',
+  OLLAMA_MODEL: 'ollamaModel',
   ENABLED: 'enabled',
   TARGET_LANG: 'targetLang',
   DISPLAY_MODE: 'displayMode',
@@ -21,8 +25,10 @@ export const L2_PREFIX = 'lec_';
 export const L1_MAX_SIZE = 50;
 
 // === Translation ===
-export const CHUNK_SIZE = 30;
+export const CHUNK_SIZE = 100;
+export const OLLAMA_CHUNK_SIZE = 5;
 export const DEFAULT_TARGET_LANG = '한국어';
+export const DEFAULT_PROVIDER = 'ollama';
 
 // === DOM Selectors (Udemy) ===
 export const SELECTORS = {
@@ -64,6 +70,13 @@ export const MODELS = {
     { value: 'gemini-2.5-flash', label: 'Flash 2.5 (빠름/저렴)' },
     { value: 'gemini-2.0-flash', label: 'Flash 2.0 (빠름/저렴)' },
     { value: 'gemini-2.5-pro', label: '2.5 Pro (고품질)' },
+  ],
+  ollama: [
+    { value: 'exaone3.5:7.8b', label: 'EXAONE 3.5 7.8B' },
+    { value: 'qwen2.5:7b', label: 'Qwen 2.5 7B' },
+    { value: 'llama3.1', label: 'Llama 3.1' },
+    { value: 'gemma2', label: 'Gemma 2' },
+    { value: 'mistral', label: 'Mistral' },
   ],
 };
 

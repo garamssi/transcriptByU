@@ -5,15 +5,34 @@
  * @returns {string} 시스템 프롬프트
  */
 export function buildBatchSystemPrompt(targetLang, context) {
-  let prompt = `You are a subtitle translator. Input lines have format "N|original text". Translate ONLY the text after the pipe to ${targetLang}.
-Rules:
-- Output format: "N|translated text" (keep the SAME number N, replace only the text part)
-- Do NOT include the line number inside the translated text
-- Output one line per input line, same order, no extras
-- Example: Input "3|Hello world" → Output "3|안녕하세요"`;
+  const langMap = { '한국어': 'Korean', '日本語': 'Japanese', '中文': 'Chinese' };
+  const langEnglish = langMap[targetLang] || targetLang;
+
+  let prompt = `You are a subtitle translator. Translate each line to ${langEnglish} (${targetLang}).
+
+INPUT FORMAT: Each line is "N|original text"
+OUTPUT FORMAT: Each line must be "N|translated text"
+
+STRICT RULES:
+1. Output EXACTLY the same number of lines as input — no more, no less
+2. Keep the SAME number N before the pipe
+3. Translate ONLY the text after the pipe to ${langEnglish}
+4. Do NOT add any explanation, commentary, or markdown formatting
+5. Do NOT wrap output in code blocks
+6. Even if input is just 1 line, follow the format exactly
+7. ${langEnglish} ONLY, nothing else. NEVER output any other language
+
+Example (translating to Korean):
+Input:
+1|See you in the next lecture.
+2|Keep learning and keep growing.
+
+Output:
+1|다음 강의에서 뵙겠습니다.
+2|계속 배우고 계속 성장하세요.`;
 
   if (context?.section) {
-    prompt += `\nContext: Online course. Section: "${context.section}".`;
+    prompt += `\n\nContext: Online course. Section: "${context.section}".`;
     if (context.lecture) prompt += ` Lecture: "${context.lecture}".`;
     prompt += ` Use domain-appropriate terminology.`;
   }

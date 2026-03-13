@@ -34,7 +34,11 @@
     <section class="card">
       <label class="card-label">AI 제공자</label>
       <div class="provider-tabs">
-        <button class="provider-tab active" data-provider="gemini">
+        <button class="provider-tab active" data-provider="ollama">
+          <span class="provider-name">Ollama</span>
+          <span class="provider-company">Local</span>
+        </button>
+        <button class="provider-tab" data-provider="gemini">
           <span class="provider-name">Gemini</span>
           <span class="provider-company">Google</span>
         </button>
@@ -58,7 +62,7 @@
       </div>
 
       <!-- Gemini API Key -->
-      <div class="provider-panel" id="geminiPanel">
+      <div class="provider-panel hidden" id="geminiPanel">
         <label for="geminiApiKey" class="form-label">API Key</label>
         <div class="input-group">
           <input type="password" id="geminiApiKey" placeholder="AIzaSy..." />
@@ -67,6 +71,14 @@
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
             </svg>
           </button>
+        </div>
+      </div>
+
+      <!-- Ollama URL -->
+      <div class="provider-panel" id="ollamaPanel">
+        <label for="ollamaUrl" class="form-label">서버 URL</label>
+        <div class="input-group">
+          <input type="text" id="ollamaUrl" placeholder="http://localhost:11434" />
         </div>
       </div>
 

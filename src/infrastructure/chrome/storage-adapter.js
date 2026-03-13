@@ -9,18 +9,24 @@
  */
 export async function getProviderConfig() {
   const stored = await chrome.storage.local.get([
-    'provider', 'claudeApiKey', 'geminiApiKey', 'apiKey', 'model'
+    'provider',
+    'claudeApiKey', 'geminiApiKey', 'ollamaUrl',
+    'claudeModel', 'geminiModel', 'ollamaModel',
+    'apiKey', 'model' // legacy
   ]);
 
-  const provider = stored.provider || 'gemini';
+  const provider = stored.provider || 'ollama';
   let apiKey, model;
 
   if (provider === 'gemini') {
     apiKey = stored.geminiApiKey;
-    model = (stored.model && stored.model.startsWith('gemini')) ? stored.model : 'gemini-2.5-flash';
+    model = stored.geminiModel || stored.model || 'gemini-2.5-flash';
+  } else if (provider === 'ollama') {
+    apiKey = stored.ollamaUrl || 'http://localhost:11434';
+    model = stored.ollamaModel || 'exaone3.5:7.8b';
   } else {
     apiKey = stored.claudeApiKey || stored.apiKey;
-    model = (stored.model && stored.model.startsWith('claude')) ? stored.model : 'claude-haiku-4-5-20251001';
+    model = stored.claudeModel || stored.model || 'claude-haiku-4-5-20251001';
   }
 
   return { provider, apiKey, model };

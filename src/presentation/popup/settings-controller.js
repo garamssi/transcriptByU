@@ -1,4 +1,5 @@
 import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS } from '../../domain/constants.js';
+import { checkOllamaConnection } from '../../infrastructure/api/ollama-client.js';
 
 /**
  * 설정 UI를 초기화한다.
@@ -8,8 +9,10 @@ import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS } from '../../domain/constants.js'
 export async function initSettingsController($, updatePreview) {
   const claudeApiKeyInput = $('claudeApiKey');
   const geminiApiKeyInput = $('geminiApiKey');
+  const ollamaUrlInput = $('ollamaUrl');
   const claudePanel = $('claudePanel');
   const geminiPanel = $('geminiPanel');
+  const ollamaPanel = $('ollamaPanel');
   const saveBtn = $('saveKey');
   const saveKeyText = $('saveKeyText');
   const saveStatus = $('saveStatus');
@@ -40,8 +43,10 @@ export async function initSettingsController($, updatePreview) {
 
   // === 저장된 설정 불러오기 ===
   const stored = await chrome.storage.local.get([
-    STORAGE_KEYS.PROVIDER, STORAGE_KEYS.CLAUDE_API_KEY, STORAGE_KEYS.GEMINI_API_KEY, STORAGE_KEYS.API_KEY,
-    STORAGE_KEYS.ENABLED, STORAGE_KEYS.MODEL, STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.DISPLAY_MODE,
+    STORAGE_KEYS.PROVIDER, STORAGE_KEYS.CLAUDE_API_KEY, STORAGE_KEYS.GEMINI_API_KEY, STORAGE_KEYS.OLLAMA_URL, STORAGE_KEYS.API_KEY,
+    STORAGE_KEYS.ENABLED, STORAGE_KEYS.MODEL,
+    STORAGE_KEYS.CLAUDE_MODEL, STORAGE_KEYS.GEMINI_MODEL, STORAGE_KEYS.OLLAMA_MODEL,
+    STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.DISPLAY_MODE,
     STORAGE_KEYS.STYLE_FONT_SIZE, STORAGE_KEYS.STYLE_FONT_COLOR, STORAGE_KEYS.STYLE_BG_COLOR,
     STORAGE_KEYS.STYLE_BG_ENABLED, STORAGE_KEYS.STYLE_BG_OPACITY, STORAGE_KEYS.STYLE_EXPANDED,
   ]);
@@ -52,19 +57,18 @@ export async function initSettingsController($, updatePreview) {
     await chrome.storage.local.set({ [STORAGE_KEYS.CLAUDE_API_KEY]: stored[STORAGE_KEYS.API_KEY] });
   }
 
-  currentProvider = stored[STORAGE_KEYS.PROVIDER] || 'gemini';
+  currentProvider = stored[STORAGE_KEYS.PROVIDER] || 'ollama';
   if (stored[STORAGE_KEYS.CLAUDE_API_KEY]) claudeApiKeyInput.value = stored[STORAGE_KEYS.CLAUDE_API_KEY];
   if (stored[STORAGE_KEYS.GEMINI_API_KEY]) geminiApiKeyInput.value = stored[STORAGE_KEYS.GEMINI_API_KEY];
+  ollamaUrlInput.value = stored[STORAGE_KEYS.OLLAMA_URL] || 'http://localhost:11434';
   enableToggle.checked = stored[STORAGE_KEYS.ENABLED] !== false;
   if (stored[STORAGE_KEYS.TARGET_LANG]) targetLangSelect.value = stored[STORAGE_KEYS.TARGET_LANG];
   if (stored[STORAGE_KEYS.DISPLAY_MODE]) displayModeSelect.value = stored[STORAGE_KEYS.DISPLAY_MODE];
 
   // provider UI 초기화
-  switchProvider(currentProvider, stored[STORAGE_KEYS.MODEL]);
-  await chrome.storage.local.set({
-    [STORAGE_KEYS.PROVIDER]: currentProvider,
-    [STORAGE_KEYS.MODEL]: modelSelect.value,
-  });
+  const savedModelForProvider = getProviderModelKey(currentProvider);
+  switchProvider(currentProvider, stored[savedModelForProvider] || stored[STORAGE_KEYS.MODEL]);
+  await saveProviderModel();
 
   // 스타일 설정 불러오기
   const fontSize = stored[STORAGE_KEYS.STYLE_FONT_SIZE] ?? STYLE_DEFAULTS.fontSize;
@@ -112,6 +116,19 @@ export async function initSettingsController($, updatePreview) {
     }
   } catch (_) {}
 
+  // === 프로바이더별 모델 키 ===
+  function getProviderModelKey(provider) {
+    const keys = { claude: STORAGE_KEYS.CLAUDE_MODEL, gemini: STORAGE_KEYS.GEMINI_MODEL, ollama: STORAGE_KEYS.OLLAMA_MODEL };
+    return keys[provider];
+  }
+
+  async function saveProviderModel() {
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.PROVIDER]: currentProvider,
+      [getProviderModelKey(currentProvider)]: modelSelect.value,
+    });
+  }
+
   // === Provider 전환 ===
   function switchProvider(provider, savedModel) {
     currentProvider = provider;
@@ -122,6 +139,7 @@ export async function initSettingsController($, updatePreview) {
 
     claudePanel.classList.toggle('hidden', provider !== 'claude');
     geminiPanel.classList.toggle('hidden', provider !== 'gemini');
+    ollamaPanel.classList.toggle('hidden', provider !== 'ollama');
 
     const models = MODELS[provider];
     modelSelect.innerHTML = models.map(m =>
@@ -138,11 +156,11 @@ export async function initSettingsController($, updatePreview) {
     tab.addEventListener('click', async () => {
       const provider = tab.dataset.provider;
       if (provider === currentProvider) return;
-      switchProvider(provider);
-      await chrome.storage.local.set({
-        [STORAGE_KEYS.PROVIDER]: provider,
-        [STORAGE_KEYS.MODEL]: modelSelect.value,
-      });
+      // 전환 전: 현재 프로바이더의 모델을 저장된 값으로 복원
+      const prevModelKey = getProviderModelKey(provider);
+      const prevStored = await chrome.storage.local.get(prevModelKey);
+      switchProvider(provider, prevStored[prevModelKey]);
+      await saveProviderModel();
       updateStatus();
     });
   });
@@ -159,15 +177,20 @@ export async function initSettingsController($, updatePreview) {
 
   // API 키 저장
   saveBtn.addEventListener('click', async () => {
-    const keyInput = currentProvider === 'claude' ? claudeApiKeyInput : geminiApiKeyInput;
-    const key = keyInput.value.trim();
-    if (!key) return;
+    if (currentProvider === 'ollama') {
+      const url = ollamaUrlInput.value.trim() || 'http://localhost:11434';
+      await chrome.storage.local.set({ [STORAGE_KEYS.OLLAMA_URL]: url });
+    } else {
+      const keyInput = currentProvider === 'claude' ? claudeApiKeyInput : geminiApiKeyInput;
+      const key = keyInput.value.trim();
+      if (!key) return;
 
-    const storageKey = currentProvider === 'claude' ? STORAGE_KEYS.CLAUDE_API_KEY : STORAGE_KEYS.GEMINI_API_KEY;
-    await chrome.storage.local.set({ [storageKey]: key });
+      const storageKey = currentProvider === 'claude' ? STORAGE_KEYS.CLAUDE_API_KEY : STORAGE_KEYS.GEMINI_API_KEY;
+      await chrome.storage.local.set({ [storageKey]: key });
 
-    if (currentProvider === 'claude') {
-      await chrome.storage.local.set({ [STORAGE_KEYS.API_KEY]: key });
+      if (currentProvider === 'claude') {
+        await chrome.storage.local.set({ [STORAGE_KEYS.API_KEY]: key });
+      }
     }
 
     saveKeyText.textContent = '';
@@ -193,7 +216,7 @@ export async function initSettingsController($, updatePreview) {
   });
 
   modelSelect.addEventListener('change', async () => {
-    await chrome.storage.local.set({ [STORAGE_KEYS.MODEL]: modelSelect.value });
+    await saveProviderModel();
   });
 
   targetLangSelect.addEventListener('change', async () => {
@@ -276,16 +299,34 @@ export async function initSettingsController($, updatePreview) {
     bgOpacityGroup.style.display = on ? '' : 'none';
   }
 
-  function updateStatus() {
-    const keyInput = currentProvider === 'claude' ? claudeApiKeyInput : geminiApiKeyInput;
-    const hasKey = keyInput.value.trim().length > 0;
-    const providerName = currentProvider === 'claude' ? 'Claude' : 'Gemini';
-    if (!hasKey) {
-      statusDot.className = 'status-dot error';
-      statusText.textContent = `${providerName} API 키를 입력하세요`;
+  async function updateStatus() {
+    const providerNames = { claude: 'Claude', gemini: 'Gemini', ollama: 'Ollama' };
+    const providerName = providerNames[currentProvider] || currentProvider;
+
+    if (currentProvider === 'ollama') {
+      statusDot.className = 'status-dot';
+      statusText.textContent = `${providerName} 연결 확인 중...`;
+
+      const ollamaUrl = ollamaUrlInput.value.trim() || 'http://localhost:11434';
+      const connected = await checkOllamaConnection(ollamaUrl);
+
+      if (connected) {
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = `${providerName} 준비됨`;
+      } else {
+        statusDot.className = 'status-dot error';
+        statusText.textContent = `${providerName} 미실행 — 터미널에서 ollama serve 실행 필요`;
+      }
     } else {
-      statusDot.className = 'status-dot connected';
-      statusText.textContent = `${providerName} 준비됨`;
+      const keyInput = currentProvider === 'claude' ? claudeApiKeyInput : geminiApiKeyInput;
+      const hasKey = keyInput.value.trim().length > 0;
+      if (!hasKey) {
+        statusDot.className = 'status-dot error';
+        statusText.textContent = `${providerName} API 키를 입력하세요`;
+      } else {
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = `${providerName} 준비됨`;
+      }
     }
   }
 

@@ -5,6 +5,7 @@
  */
 export function errorToMessage(error) {
   if (!error) return '⚠ 번역 실패';
+  if (error === 'OLLAMA_NOT_RUNNING') return '⚠ Ollama가 실행되지 않음. 터미널에서 "ollama serve"를 실행하세요';
   if (error === 'RATE_LIMIT') return '⚠ API 할당량 초과';
   if (error === 'NO_API_KEY') return '⚠ API 키를 설정하세요';
   if (error === 'DISABLED') return '';
