@@ -1,6 +1,4 @@
 # Ollama 설치 가이드
-> Mac M1 기준 | exaone3.5:7.8b 한국어 번역 모델
-
 ---
 
 ## Step 1. Homebrew 설치 확인
