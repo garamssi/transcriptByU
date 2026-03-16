@@ -1,5 +1,5 @@
 import { CHUNK_SIZE, OLLAMA_CHUNK_SIZE, DEFAULT_TARGET_LANG } from '../domain/constants.js';
-import { buildBatchSystemPrompt } from '../domain/prompt-builder.js';
+import { buildBatchSystemPrompt, buildOllamaSystemPrompt } from '../domain/prompt-builder.js';
 import { parseBatchResponse } from '../domain/response-parser.js';
 import { lectureCacheKey } from '../domain/cache-key.js';
 
@@ -64,7 +64,9 @@ export class TranslationService {
       // 3) 미번역분: 중복 제거 후 API 호출
       if (uncachedIndices.length > 0) {
         const uniqueTexts = [...new Set(uncachedIndices.map(i => texts[i]))];
-        const systemPrompt = buildBatchSystemPrompt(targetLang, context);
+        const systemPrompt = provider === 'ollama'
+          ? buildOllamaSystemPrompt(targetLang, context)
+          : buildBatchSystemPrompt(targetLang, context);
 
         try {
           const newTranslations = await this._translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model);
@@ -110,7 +112,9 @@ export class TranslationService {
       const lKey = lectureCacheKey(targetLang, context.section, context.lecture);
 
       const uniqueTexts = [...new Set(texts)];
-      const systemPrompt = buildBatchSystemPrompt(targetLang, context);
+      const systemPrompt = provider === 'ollama'
+        ? buildOllamaSystemPrompt(targetLang, context)
+        : buildBatchSystemPrompt(targetLang, context);
 
       const translationMap = await this._translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model);
 

@@ -20,7 +20,13 @@ export async function callOllama(systemPrompt, userText, baseUrl, model) {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userText }
         ],
-        stream: false
+        stream: false,
+        keep_alive: '30m',
+        options: {
+          num_ctx: 4096,
+          temperature: 0,
+          num_predict: 1024
+        }
       })
     });
   } catch (e) {
