@@ -26,7 +26,7 @@ export const L1_MAX_SIZE = 50;
 
 // === Translation ===
 export const CHUNK_SIZE = 40;
-export const OLLAMA_CHUNK_SIZE = 10;
+export const OLLAMA_CHUNK_SIZE = 5;
 export const DEFAULT_TARGET_LANG = '한국어';
 export const DEFAULT_PROVIDER = 'ollama';
 

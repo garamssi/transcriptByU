@@ -16,14 +16,14 @@ export function parseBatchResponse(responseText, expectedCount) {
   const lines = cleaned.split('\n').filter(l => l.trim());
   const result = new Map();
 
-  // 1차: N|text 형식으로 파싱
+  // 1차: N|text 형식으로 파싱 (expectedCount 범위 내만 허용)
   for (const line of lines) {
     const trimmed = line.trim();
     const pipeIdx = trimmed.indexOf('|');
     if (pipeIdx === -1) continue;
     const num = parseInt(trimmed.slice(0, pipeIdx).trim());
     const text = trimmed.slice(pipeIdx + 1).trim();
-    if (!isNaN(num) && num > 0 && text) {
+    if (!isNaN(num) && num > 0 && text && (!expectedCount || num <= expectedCount)) {
       result.set(num, text);
     }
   }

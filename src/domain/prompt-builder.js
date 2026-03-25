@@ -51,13 +51,17 @@ export function buildOllamaSystemPrompt(targetLang, context) {
   const langMap = { '한국어': 'Korean', '日本語': 'Japanese', '中文': 'Chinese' };
   const langEnglish = langMap[targetLang] || targetLang;
 
-  let prompt = `Translate each line to ${langEnglish}.
-Format: "N|text" in, "N|translated" out.
-RULES:
-- Output ONLY "N|translated text" lines, nothing else
-- Do NOT add explanations, commentary, or notes about incomplete sentences
-- If a sentence is incomplete or cut off, translate it as-is without any comment
-- NEVER wrap output in parentheses with meta-comments
+  let prompt = `You are a line-by-line subtitle translator. Each input line has a number and pipe separator.
+You MUST output the SAME number of lines with the SAME numbers. Do NOT merge or split lines.
+
+Format: "N|text" → "N|translated"
+
+CRITICAL RULES:
+- One input line = one output line. NEVER combine two input lines into one output
+- Keep the EXACT same line number N from input
+- Translate ONLY the text after the pipe to ${langEnglish}
+- Output NOTHING else — no notes, no comments, no explanations
+- If a sentence is cut off or incomplete, translate it as-is
 - ${langEnglish} ONLY`;
 
   if (context?.section) {

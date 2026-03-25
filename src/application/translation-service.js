@@ -189,16 +189,41 @@ export class TranslationService {
    * @private
    */
   async _translateAndParse(texts, systemPrompt, provider, apiKey, model, maxTokens, translationMap) {
-    const userText = texts.map((t, j) => `${j + 1}|${t}`).join('\n');
+    const numberedLines = texts.map((t, j) => `${j + 1}|${t}`).join('\n');
+    const userText = `[${texts.length} lines — output exactly ${texts.length} lines]\n${numberedLines}`;
     const responseText = await this.callApi(systemPrompt, userText, provider, apiKey, model, maxTokens);
     console.log(`[UdemyTranslator:${provider}] Raw response:\n${responseText}`);
     const parsed = parseBatchResponse(responseText, texts.length);
     console.log(`[UdemyTranslator:${provider}] Parsed ${parsed.size}/${texts.length} lines`);
 
+    // 응답 줄 수가 입력보다 많으면 밀림 가능성 → 전체 실패 처리
+    const rawLineCount = responseText.split('\n').filter(l => l.trim()).length;
+    if (rawLineCount > texts.length) {
+      console.warn(`[UdemyTranslator:${provider}] Response has ${rawLineCount} lines for ${texts.length} inputs — likely shifted, rejecting all`);
+      return [...texts];
+    }
+
+    // 중복 번역 감지: 다른 원본인데 같은 번역이면 의심
+    const translationToNum = new Map();
+    const suspectNums = new Set();
+    for (let j = 0; j < texts.length; j++) {
+      const translation = parsed.get(j + 1);
+      if (!translation) continue;
+      const prevNum = translationToNum.get(translation);
+      if (prevNum !== undefined && texts[prevNum] !== texts[j]) {
+        suspectNums.add(prevNum);
+        suspectNums.add(j);
+      }
+      translationToNum.set(translation, j);
+    }
+    if (suspectNums.size > 0) {
+      console.warn(`[UdemyTranslator:${provider}] Duplicate translations detected at indices: ${[...suspectNums].join(',')}`);
+    }
+
     const failed = [];
     for (let j = 0; j < texts.length; j++) {
       const translation = parsed.get(j + 1);
-      if (translation) {
+      if (translation && !suspectNums.has(j)) {
         translationMap[texts[j]] = translation;
       } else {
         failed.push(texts[j]);
