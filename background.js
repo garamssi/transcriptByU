@@ -1,5 +1,5 @@
 import { LRUCache } from './src/infrastructure/cache/lru-cache.js';
-import { l2Get, l2Set } from './src/infrastructure/cache/storage-cache.js';
+import { l2Get, l2Set, l2Delete } from './src/infrastructure/cache/storage-cache.js';
 import { callApi } from './src/infrastructure/api/api-client.js';
 import { getProviderConfig } from './src/infrastructure/chrome/storage-adapter.js';
 import { TranslationService } from './src/application/translation-service.js';
@@ -10,7 +10,7 @@ const l1Cache = new LRUCache();
 
 const translationService = new TranslationService({
   l1Cache,
-  l2Cache: { l2Get, l2Set },
+  l2Cache: { l2Get, l2Set, l2Delete },
   callApi,
   getProviderConfig,
 });
@@ -33,8 +33,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === 'RETRANSLATE_BATCH') {
-    translationService.retranslateBatch(message).then(sendResponse);
+  if (message.type === 'CLEAR_LECTURE_CACHE') {
+    translationService.clearLectureCache(message).then(() => sendResponse({ success: true }));
     return true;
   }
 

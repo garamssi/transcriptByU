@@ -13,7 +13,8 @@ export async function l2Set(key, value) {
   await chrome.storage.local.set({ [L2_PREFIX + key]: value });
 }
 
-export async function l2Delete(keys) {
+export async function l2Delete(keyOrKeys) {
+  const keys = Array.isArray(keyOrKeys) ? keyOrKeys : [keyOrKeys];
   const storageKeys = keys.map(k => k.startsWith(L2_PREFIX) ? k : L2_PREFIX + k);
   if (storageKeys.length > 0) {
     await chrome.storage.local.remove(storageKeys);

@@ -349,7 +349,7 @@ export function removeAllTranslations() {
   observerPaused = false;
 }
 
-// === 전체 재번역 (청크 단위 비동기) ===
+// === 전체 재번역 (캐시 삭제 후 처음부터 다시 번역) ===
 export async function retranslateAll() {
   console.log('[UdemyTranslator] retranslateAll() called');
   const panel = document.querySelector(SELECTORS.panel);
@@ -358,80 +358,37 @@ export async function retranslateAll() {
   const cueItems = collectCues(panel);
   if (cueItems.length === 0) return { count: 0 };
 
-  const uniqueTexts = [...new Set(cueItems.map(c => c.text))];
-  const textToCues = buildTextToCueMap(cueItems);
+  const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG]);
+  const lang = stored[STORAGE_KEYS.TARGET_LANG] || '한국어';
+  const ctx = getLectureContext();
 
+  // 1) 현재 강의 캐시 삭제 (L1 + L2)
+  await chrome.runtime.sendMessage({
+    type: 'CLEAR_LECTURE_CACHE',
+    lang,
+    lecture: ctx.lecture,
+    section: ctx.section
+  });
+  console.log('[UdemyTranslator] retranslateAll: lecture cache cleared');
+
+  // 2) DOM에서 번역 상태 초기화 (원본 복원)
   observerPaused = true;
-  for (const { textSpan, container } of cueItems) {
-    applyLoading(textSpan, container, '재번역 중...');
+  for (const { textSpan } of cueItems) {
+    if (textSpan.dataset.original) {
+      textSpan.textContent = textSpan.dataset.original;
+      delete textSpan.dataset.original;
+      delete textSpan.dataset.translated;
+    }
+    const parent = textSpan.closest('p') || textSpan.parentElement;
+    parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach(el => el.remove());
   }
   observerPaused = false;
 
-  const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.PROVIDER]);
-  const lang = stored[STORAGE_KEYS.TARGET_LANG] || '한국어';
-  const provider = stored[STORAGE_KEYS.PROVIDER] || 'ollama';
-  const chunkSize = provider === 'ollama' ? OLLAMA_CHUNK_SIZE : CHUNK_SIZE;
-  const ctx = getLectureContext();
+  // 3) 일반 번역 흐름으로 전체 재번역
+  await translateAllCues(panel);
 
-  const chunks = [];
-  for (let i = 0; i < uniqueTexts.length; i += chunkSize) {
-    chunks.push(uniqueTexts.slice(i, i + chunkSize));
-  }
-
-  let count = 0;
-  for (let idx = 0; idx < chunks.length; idx++) {
-    const chunk = chunks[idx];
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'RETRANSLATE_BATCH',
-        texts: chunk,
-        lang,
-        lecture: ctx.lecture,
-        section: ctx.section
-      });
-
-      if (response?.error) {
-        const errMsg = errorToMessage(response.error);
-        observerPaused = true;
-        for (const text of chunk) {
-          for (const { textSpan, container } of (textToCues.get(text) || [])) {
-            applyError(textSpan, container, errMsg);
-          }
-        }
-        observerPaused = false;
-        continue;
-      }
-
-      const results = response?.results || [];
-      observerPaused = true;
-      for (let i = 0; i < chunk.length; i++) {
-        const result = results[i];
-        for (const { textSpan, container } of (textToCues.get(chunk[i]) || [])) {
-          if (result?.translation) {
-            applyTranslation(textSpan, container, result.translation);
-            count++;
-          } else {
-            applyError(textSpan, container, '⚠ 번역 오류');
-          }
-        }
-      }
-      observerPaused = false;
-
-      const captionEl = document.querySelector(CAPTION_SELECTOR);
-      if (captionEl) replaceCaptionText(captionEl);
-
-      console.log(`[UdemyTranslator] Retranslate chunk ${idx + 1}/${chunks.length} applied`);
-    } catch (err) {
-      observerPaused = true;
-      for (const text of chunk) {
-        for (const { textSpan, container } of (textToCues.get(text) || [])) {
-          applyError(textSpan, container, '⚠ 연결 오류');
-        }
-      }
-      observerPaused = false;
-    }
-  }
-
+  const translated = collectCues(panel).filter(({ textSpan }) => textSpan.dataset.original);
+  const count = translated.length;
   console.log(`[UdemyTranslator] retranslateAll: ${count} items translated`);
   return { count };
 }

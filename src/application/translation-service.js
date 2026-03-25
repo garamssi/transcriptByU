@@ -100,43 +100,15 @@ export class TranslationService {
   }
 
   /**
-   * 배치 재번역 (캐시 무시, API 호출 후 캐시 덮어쓰기)
+   * 특정 강의의 캐시를 삭제한다 (L1 + L2).
    */
-  async retranslateBatch({ texts, lang, lecture, section }) {
-    try {
-      const { provider, apiKey, model } = await this.getProviderConfig();
-      if (!apiKey) return { error: 'NO_API_KEY' };
+  async clearLectureCache({ lang, lecture, section }) {
+    const targetLang = lang;
+    const context = { lecture: lecture || '', section: section || '' };
+    const lKey = lectureCacheKey(targetLang, context.section, context.lecture);
 
-      const targetLang = lang;
-      const context = { lecture: lecture || '', section: section || '' };
-      const lKey = lectureCacheKey(targetLang, context.section, context.lecture);
-
-      const uniqueTexts = [...new Set(texts)];
-      const systemPrompt = provider === 'ollama'
-        ? buildOllamaSystemPrompt(targetLang, context)
-        : buildBatchSystemPrompt(targetLang, context);
-
-      const translationMap = await this._translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model);
-
-      const results = new Array(texts.length).fill(null);
-      for (let i = 0; i < texts.length; i++) {
-        const translation = translationMap[texts[i]];
-        if (translation) {
-          results[i] = { translation };
-        } else {
-          results[i] = { error: 'PARSE_ERROR' };
-        }
-      }
-
-      if (Object.keys(translationMap).length > 0) {
-        this.l1Cache.set(lKey, translationMap);
-        await this.l2Cache.l2Set(lKey, translationMap);
-      }
-
-      return { results };
-    } catch (err) {
-      return { error: err.message };
-    }
+    this.l1Cache.delete(lKey);
+    await this.l2Cache.l2Delete(lKey);
   }
 
   /**

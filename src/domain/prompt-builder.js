@@ -51,7 +51,14 @@ export function buildOllamaSystemPrompt(targetLang, context) {
   const langMap = { '한국어': 'Korean', '日本語': 'Japanese', '中文': 'Chinese' };
   const langEnglish = langMap[targetLang] || targetLang;
 
-  let prompt = `Translate each line to ${langEnglish}. Format: "N|text" in, "N|translated" out. No extra text.`;
+  let prompt = `Translate each line to ${langEnglish}.
+Format: "N|text" in, "N|translated" out.
+RULES:
+- Output ONLY "N|translated text" lines, nothing else
+- Do NOT add explanations, commentary, or notes about incomplete sentences
+- If a sentence is incomplete or cut off, translate it as-is without any comment
+- NEVER wrap output in parentheses with meta-comments
+- ${langEnglish} ONLY`;
 
   if (context?.section) {
     prompt += ` Course: "${context.section}"`;
