@@ -154,7 +154,7 @@ export class TranslationService {
   }
 
   /**
-   * Cloud 전략 (Gemini/Claude): 대청크, 청크 간 1초 딜레이, 재시도 없음
+   * Cloud 전략 (Gemini/Claude): 대청크, 청크 간 1초 딜레이, 실패분 1회 재시도
    * @private
    */
   async _translateCloud(uniqueTexts, systemPrompt, provider, apiKey, model) {
@@ -167,7 +167,18 @@ export class TranslationService {
       // 청크 간 1초 딜레이 (rate limit 보호)
       if (start > 0) await new Promise(r => setTimeout(r, 1000));
 
-      await this._translateAndParse(chunk, systemPrompt, provider, apiKey, model, maxTokens, translationMap);
+      const failed = await this._translateAndParse(chunk, systemPrompt, provider, apiKey, model, maxTokens, translationMap);
+
+      // 실패분 1회 재시도
+      if (failed.length > 0) {
+        console.log(`[UdemyTranslator:${provider}] Retrying ${failed.length} failed texts`);
+        await new Promise(r => setTimeout(r, 1000));
+        const retryMaxTokens = Math.max(4096, failed.length * 400);
+        const stillFailed = await this._translateAndParse(failed, systemPrompt, provider, apiKey, model, retryMaxTokens, translationMap);
+        if (stillFailed.length > 0) {
+          console.warn(`[UdemyTranslator:${provider}] ${stillFailed.length} texts failed after retry`);
+        }
+      }
     }
 
     return translationMap;

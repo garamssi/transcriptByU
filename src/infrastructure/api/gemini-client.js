@@ -16,22 +16,34 @@ export async function callGemini(systemPrompt, userText, apiKey, model, maxToken
     genConfig.thinkingConfig = { thinkingBudget: 0 };
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userText }] }],
-      generationConfig: genConfig
-    })
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userText }] }],
+    generationConfig: genConfig
   });
 
-  if (response.status === 429) throw new Error('RATE_LIMIT');
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`API_ERROR:${response.status}:${errBody}`);
-  }
+  const maxRetries = 3;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
 
-  const data = await response.json();
-  return data.candidates[0].content.parts[0].text.trim();
+    if (response.status === 429) {
+      if (attempt >= maxRetries) throw new Error('RATE_LIMIT');
+      const waitSec = Math.min(15 * (2 ** attempt), 120);
+      console.log(`[Gemini] Rate limited, waiting ${waitSec}s (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, waitSec * 1000));
+      continue;
+    }
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`API_ERROR:${response.status}:${errBody}`);
+    }
+
+    const data = await response.json();
+    return data.candidates[0].content.parts[0].text.trim();
+  }
 }

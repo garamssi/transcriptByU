@@ -22,7 +22,7 @@
     STYLE_BG_OPACITY: "styleBgOpacity",
     STYLE_EXPANDED: "styleExpanded"
   };
-  var CHUNK_SIZE = 100;
+  var CHUNK_SIZE = 40;
   var OLLAMA_CHUNK_SIZE = 10;
   var SELECTORS = {
     panel: '[data-purpose="transcript-panel"]',
