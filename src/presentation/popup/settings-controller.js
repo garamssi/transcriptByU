@@ -1,5 +1,6 @@
 import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS } from '../../domain/constants.js';
 import { checkOllamaConnection } from '../../infrastructure/api/ollama-client.js';
+import { checkClaudeCodeConnection } from '../../infrastructure/api/claude-code-client.js';
 
 /**
  * 설정 UI를 초기화한다.
@@ -10,9 +11,11 @@ export async function initSettingsController($, updatePreview) {
   const claudeApiKeyInput = $('claudeApiKey');
   const geminiApiKeyInput = $('geminiApiKey');
   const ollamaUrlInput = $('ollamaUrl');
+  const claudeCodeUrlInput = $('claudeCodeUrl');
   const claudePanel = $('claudePanel');
   const geminiPanel = $('geminiPanel');
   const ollamaPanel = $('ollamaPanel');
+  const claudeCodePanel = $('claudeCodePanel');
   const saveBtn = $('saveKey');
   const saveKeyText = $('saveKeyText');
   const saveStatus = $('saveStatus');
@@ -43,9 +46,9 @@ export async function initSettingsController($, updatePreview) {
 
   // === 저장된 설정 불러오기 ===
   const stored = await chrome.storage.local.get([
-    STORAGE_KEYS.PROVIDER, STORAGE_KEYS.CLAUDE_API_KEY, STORAGE_KEYS.GEMINI_API_KEY, STORAGE_KEYS.OLLAMA_URL, STORAGE_KEYS.API_KEY,
+    STORAGE_KEYS.PROVIDER, STORAGE_KEYS.CLAUDE_API_KEY, STORAGE_KEYS.GEMINI_API_KEY, STORAGE_KEYS.OLLAMA_URL, STORAGE_KEYS.CLAUDE_CODE_URL, STORAGE_KEYS.API_KEY,
     STORAGE_KEYS.ENABLED, STORAGE_KEYS.MODEL,
-    STORAGE_KEYS.CLAUDE_MODEL, STORAGE_KEYS.GEMINI_MODEL, STORAGE_KEYS.OLLAMA_MODEL,
+    STORAGE_KEYS.CLAUDE_MODEL, STORAGE_KEYS.GEMINI_MODEL, STORAGE_KEYS.OLLAMA_MODEL, STORAGE_KEYS.CLAUDE_CODE_MODEL,
     STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.DISPLAY_MODE,
     STORAGE_KEYS.STYLE_FONT_SIZE, STORAGE_KEYS.STYLE_FONT_COLOR, STORAGE_KEYS.STYLE_BG_COLOR,
     STORAGE_KEYS.STYLE_BG_ENABLED, STORAGE_KEYS.STYLE_BG_OPACITY, STORAGE_KEYS.STYLE_EXPANDED,
@@ -61,6 +64,7 @@ export async function initSettingsController($, updatePreview) {
   if (stored[STORAGE_KEYS.CLAUDE_API_KEY]) claudeApiKeyInput.value = stored[STORAGE_KEYS.CLAUDE_API_KEY];
   if (stored[STORAGE_KEYS.GEMINI_API_KEY]) geminiApiKeyInput.value = stored[STORAGE_KEYS.GEMINI_API_KEY];
   ollamaUrlInput.value = stored[STORAGE_KEYS.OLLAMA_URL] || 'http://localhost:11434';
+  claudeCodeUrlInput.value = stored[STORAGE_KEYS.CLAUDE_CODE_URL] || 'http://localhost:3456';
   enableToggle.checked = stored[STORAGE_KEYS.ENABLED] !== false;
   if (stored[STORAGE_KEYS.TARGET_LANG]) targetLangSelect.value = stored[STORAGE_KEYS.TARGET_LANG];
   if (stored[STORAGE_KEYS.DISPLAY_MODE]) displayModeSelect.value = stored[STORAGE_KEYS.DISPLAY_MODE];
@@ -118,7 +122,7 @@ export async function initSettingsController($, updatePreview) {
 
   // === 프로바이더별 모델 키 ===
   function getProviderModelKey(provider) {
-    const keys = { claude: STORAGE_KEYS.CLAUDE_MODEL, gemini: STORAGE_KEYS.GEMINI_MODEL, ollama: STORAGE_KEYS.OLLAMA_MODEL };
+    const keys = { claude: STORAGE_KEYS.CLAUDE_MODEL, gemini: STORAGE_KEYS.GEMINI_MODEL, ollama: STORAGE_KEYS.OLLAMA_MODEL, 'claude-code': STORAGE_KEYS.CLAUDE_CODE_MODEL };
     return keys[provider];
   }
 
@@ -140,6 +144,7 @@ export async function initSettingsController($, updatePreview) {
     claudePanel.classList.toggle('hidden', provider !== 'claude');
     geminiPanel.classList.toggle('hidden', provider !== 'gemini');
     ollamaPanel.classList.toggle('hidden', provider !== 'ollama');
+    claudeCodePanel.classList.toggle('hidden', provider !== 'claude-code');
 
     const models = MODELS[provider];
     modelSelect.innerHTML = models.map(m =>
@@ -180,6 +185,9 @@ export async function initSettingsController($, updatePreview) {
     if (currentProvider === 'ollama') {
       const url = ollamaUrlInput.value.trim() || 'http://localhost:11434';
       await chrome.storage.local.set({ [STORAGE_KEYS.OLLAMA_URL]: url });
+    } else if (currentProvider === 'claude-code') {
+      const url = claudeCodeUrlInput.value.trim() || 'http://localhost:3456';
+      await chrome.storage.local.set({ [STORAGE_KEYS.CLAUDE_CODE_URL]: url });
     } else {
       const keyInput = currentProvider === 'claude' ? claudeApiKeyInput : geminiApiKeyInput;
       const key = keyInput.value.trim();
@@ -300,7 +308,7 @@ export async function initSettingsController($, updatePreview) {
   }
 
   async function updateStatus() {
-    const providerNames = { claude: 'Claude', gemini: 'Gemini', ollama: 'Ollama' };
+    const providerNames = { claude: 'Claude', gemini: 'Gemini', ollama: 'Ollama', 'claude-code': 'Claude Code' };
     const providerName = providerNames[currentProvider] || currentProvider;
 
     if (currentProvider === 'ollama') {
@@ -316,6 +324,20 @@ export async function initSettingsController($, updatePreview) {
       } else {
         statusDot.className = 'status-dot error';
         statusText.textContent = `${providerName} 미실행 — 터미널에서 ollama serve 실행 필요`;
+      }
+    } else if (currentProvider === 'claude-code') {
+      statusDot.className = 'status-dot';
+      statusText.textContent = `${providerName} 연결 확인 중...`;
+
+      const ccUrl = claudeCodeUrlInput.value.trim() || 'http://localhost:3456';
+      const connected = await checkClaudeCodeConnection(ccUrl);
+
+      if (connected) {
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = `${providerName} 준비됨`;
+      } else {
+        statusDot.className = 'status-dot error';
+        statusText.textContent = `${providerName} 미실행 — 터미널에서 node proxy-server/server.js 실행 필요`;
       }
     } else {
       const keyInput = currentProvider === 'claude' ? claudeApiKeyInput : geminiApiKeyInput;

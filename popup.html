@@ -34,9 +34,9 @@
     <section class="card">
       <label class="card-label">AI 제공자</label>
       <div class="provider-tabs">
-        <button class="provider-tab active" data-provider="ollama">
-          <span class="provider-name">Ollama</span>
-          <span class="provider-company">Local</span>
+        <button class="provider-tab active" data-provider="claude-code">
+          <span class="provider-name">Claude Code</span>
+          <span class="provider-company">Local CLI</span>
         </button>
         <button class="provider-tab" data-provider="gemini">
           <span class="provider-name">Gemini</span>
@@ -45,6 +45,10 @@
         <button class="provider-tab" data-provider="claude">
           <span class="provider-name">Claude</span>
           <span class="provider-company">Anthropic</span>
+        </button>
+        <button class="provider-tab" data-provider="ollama">
+          <span class="provider-name">Ollama</span>
+          <span class="provider-company">Local</span>
         </button>
       </div>
 
@@ -74,8 +78,16 @@
         </div>
       </div>
 
+      <!-- Claude Code URL -->
+      <div class="provider-panel" id="claudeCodePanel">
+        <label for="claudeCodeUrl" class="form-label">프록시 서버 URL</label>
+        <div class="input-group">
+          <input type="text" id="claudeCodeUrl" placeholder="http://localhost:3456" />
+        </div>
+      </div>
+
       <!-- Ollama URL -->
-      <div class="provider-panel" id="ollamaPanel">
+      <div class="provider-panel hidden" id="ollamaPanel">
         <label for="ollamaUrl" class="form-label">서버 URL</label>
         <div class="input-group">
           <input type="text" id="ollamaUrl" placeholder="http://localhost:11434" />

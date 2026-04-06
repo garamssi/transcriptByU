@@ -10,12 +10,12 @@
 export async function getProviderConfig() {
   const stored = await chrome.storage.local.get([
     'provider',
-    'claudeApiKey', 'geminiApiKey', 'ollamaUrl',
-    'claudeModel', 'geminiModel', 'ollamaModel',
+    'claudeApiKey', 'geminiApiKey', 'ollamaUrl', 'claudeCodeUrl',
+    'claudeModel', 'geminiModel', 'ollamaModel', 'claudeCodeModel',
     'apiKey', 'model' // legacy
   ]);
 
-  const provider = stored.provider || 'ollama';
+  const provider = stored.provider || 'claude-code';
   let apiKey, model;
 
   if (provider === 'gemini') {
@@ -24,6 +24,9 @@ export async function getProviderConfig() {
   } else if (provider === 'ollama') {
     apiKey = stored.ollamaUrl || 'http://localhost:11434';
     model = stored.ollamaModel || 'exaone3.5:7.8b';
+  } else if (provider === 'claude-code') {
+    apiKey = stored.claudeCodeUrl || 'http://localhost:3456';
+    model = stored.claudeCodeModel || 'claude-sonnet-4-6';
   } else {
     apiKey = stored.claudeApiKey || stored.apiKey;
     model = stored.claudeModel || stored.model || 'claude-haiku-4-5-20251001';

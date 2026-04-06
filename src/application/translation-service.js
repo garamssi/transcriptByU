@@ -119,7 +119,32 @@ export class TranslationService {
     if (provider === 'ollama') {
       return this._translateOllama(uniqueTexts, systemPrompt, apiKey, model);
     }
+    if (provider === 'claude-code') {
+      return this._translateClaudeCode(uniqueTexts, systemPrompt, apiKey, model);
+    }
     return this._translateCloud(uniqueTexts, systemPrompt, provider, apiKey, model);
+  }
+
+  /**
+   * Claude Code 전략: 청크 없이 전체를 한 번에 전송, 실패분 1회 재시도
+   * @private
+   */
+  async _translateClaudeCode(uniqueTexts, systemPrompt, apiKey, model) {
+    const translationMap = {};
+    const maxTokens = Math.max(4096, uniqueTexts.length * 400);
+
+    const failed = await this._translateAndParse(uniqueTexts, systemPrompt, 'claude-code', apiKey, model, maxTokens, translationMap);
+
+    if (failed.length > 0) {
+      console.log(`[UdemyTranslator:claude-code] Retrying ${failed.length} failed texts`);
+      const retryMaxTokens = Math.max(4096, failed.length * 400);
+      const stillFailed = await this._translateAndParse(failed, systemPrompt, 'claude-code', apiKey, model, retryMaxTokens, translationMap);
+      if (stillFailed.length > 0) {
+        console.warn(`[UdemyTranslator:claude-code] ${stillFailed.length} texts failed after retry`);
+      }
+    }
+
+    return translationMap;
   }
 
   /**

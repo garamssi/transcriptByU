@@ -4,11 +4,13 @@ export const STORAGE_KEYS = {
   CLAUDE_API_KEY: 'claudeApiKey',
   GEMINI_API_KEY: 'geminiApiKey',
   OLLAMA_URL: 'ollamaUrl',
+  CLAUDE_CODE_URL: 'claudeCodeUrl',
   API_KEY: 'apiKey', // legacy
   MODEL: 'model', // legacy
   CLAUDE_MODEL: 'claudeModel',
   GEMINI_MODEL: 'geminiModel',
   OLLAMA_MODEL: 'ollamaModel',
+  CLAUDE_CODE_MODEL: 'claudeCodeModel',
   ENABLED: 'enabled',
   TARGET_LANG: 'targetLang',
   DISPLAY_MODE: 'displayMode',
@@ -28,7 +30,7 @@ export const L1_MAX_SIZE = 50;
 export const CHUNK_SIZE = 40;
 export const OLLAMA_CHUNK_SIZE = 5;
 export const DEFAULT_TARGET_LANG = '한국어';
-export const DEFAULT_PROVIDER = 'ollama';
+export const DEFAULT_PROVIDER = 'claude-code';
 
 // === DOM Selectors (Udemy) ===
 export const SELECTORS = {
@@ -77,6 +79,10 @@ export const MODELS = {
     { value: 'llama3.1', label: 'Llama 3.1' },
     { value: 'gemma2', label: 'Gemma 2' },
     { value: 'mistral', label: 'Mistral' },
+  ],
+  'claude-code': [
+    { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6 (빠름)' },
+    { value: 'claude-opus-4-6', label: 'Opus 4.6 (고품질)' },
   ],
 };
 
