@@ -144,7 +144,6 @@
   // src/presentation/content/vtt-bridge.js
   var vttTranslationStore = /* @__PURE__ */ new Map();
   var processedUrls = /* @__PURE__ */ new Set();
-  var vttReady = false;
   var vttPending = false;
   function initVttBridge() {
     window.addEventListener("message", async function(event) {
@@ -175,7 +174,6 @@
             vttTranslationStore.set(uniqueTexts[i], results[i].translation);
           }
         }
-        vttReady = true;
         console.log("[UdemyTranslator:VTT] " + vttTranslationStore.size + "/" + uniqueTexts.length + " translations stored");
         document.dispatchEvent(new Event("vtt-translations-ready"));
       } catch (err) {
@@ -188,13 +186,9 @@
   function getVttTranslation(text) {
     return vttTranslationStore.get(text) || null;
   }
-  function isVttPending() {
-    return vttPending;
-  }
   function clearVttStore() {
     vttTranslationStore.clear();
     processedUrls.clear();
-    vttReady = false;
     vttPending = false;
   }
 

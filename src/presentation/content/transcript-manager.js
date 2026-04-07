@@ -9,9 +9,6 @@ let currentPanel = null;
 let settleTimer = null;
 let observerPaused = false;
 
-export function getObserverPaused() { return observerPaused; }
-export function setObserverPaused(val) { observerPaused = val; }
-
 // === 강의 컨텍스트 추출 ===
 export function getLectureContext() {
   const result = { lecture: '', section: '' };

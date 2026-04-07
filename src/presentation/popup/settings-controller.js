@@ -57,7 +57,7 @@ export async function initSettingsController($, updatePreview) {
     await chrome.storage.local.set({ [STORAGE_KEYS.CLAUDE_API_KEY]: stored[STORAGE_KEYS.API_KEY] });
   }
 
-  currentProvider = stored[STORAGE_KEYS.PROVIDER] || 'ollama';
+  currentProvider = stored[STORAGE_KEYS.PROVIDER] || 'claude-code';
   if (stored[STORAGE_KEYS.CLAUDE_API_KEY]) claudeApiKeyInput.value = stored[STORAGE_KEYS.CLAUDE_API_KEY];
   if (stored[STORAGE_KEYS.GEMINI_API_KEY]) geminiApiKeyInput.value = stored[STORAGE_KEYS.GEMINI_API_KEY];
   claudeCodeUrlInput.value = stored[STORAGE_KEYS.CLAUDE_CODE_URL] || 'http://localhost:3456';

@@ -3,7 +3,6 @@ import { getLectureContext } from './transcript-manager.js';
 
 const vttTranslationStore = new Map();
 const processedUrls = new Set();
-let vttReady = false;
 let vttPending = false;
 
 /**
@@ -52,7 +51,6 @@ export function initVttBridge() {
         }
       }
 
-      vttReady = true;
       console.log(`[UdemyTranslator:VTT] ${vttTranslationStore.size}/${uniqueTexts.length} translations stored`);
       document.dispatchEvent(new Event('vtt-translations-ready'));
     } catch (err) {
@@ -73,25 +71,10 @@ export function getVttTranslation(text) {
 }
 
 /**
- * VTT 번역 요청이 진행 중인지 반환한다.
- */
-export function isVttPending() {
-  return vttPending;
-}
-
-/**
- * VTT 번역이 완료되었는지 반환한다.
- */
-export function isVttReady() {
-  return vttReady;
-}
-
-/**
  * VTT 저장소를 초기화한다 (네비게이션 시 호출).
  */
 export function clearVttStore() {
   vttTranslationStore.clear();
   processedUrls.clear();
-  vttReady = false;
   vttPending = false;
 }
