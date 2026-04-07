@@ -1,5 +1,5 @@
-import { CHUNK_SIZE, OLLAMA_CHUNK_SIZE, DEFAULT_TARGET_LANG } from '../domain/constants.js';
-import { buildBatchSystemPrompt, buildOllamaSystemPrompt } from '../domain/prompt-builder.js';
+import { CHUNK_SIZE, DEFAULT_TARGET_LANG } from '../domain/constants.js';
+import { buildBatchSystemPrompt } from '../domain/prompt-builder.js';
 import { parseBatchResponse } from '../domain/response-parser.js';
 import { lectureCacheKey } from '../domain/cache-key.js';
 
@@ -64,9 +64,7 @@ export class TranslationService {
       // 3) 미번역분: 중복 제거 후 API 호출
       if (uncachedIndices.length > 0) {
         const uniqueTexts = [...new Set(uncachedIndices.map(i => texts[i]))];
-        const systemPrompt = provider === 'ollama'
-          ? buildOllamaSystemPrompt(targetLang, context)
-          : buildBatchSystemPrompt(targetLang, context);
+        const systemPrompt = buildBatchSystemPrompt(targetLang, context);
 
         try {
           const newTranslations = await this._translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model);
@@ -116,9 +114,6 @@ export class TranslationService {
    * @private
    */
   async _translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model) {
-    if (provider === 'ollama') {
-      return this._translateOllama(uniqueTexts, systemPrompt, apiKey, model);
-    }
     if (provider === 'claude-code') {
       return this._translateClaudeCode(uniqueTexts, systemPrompt, apiKey, model);
     }
@@ -141,37 +136,6 @@ export class TranslationService {
       const stillFailed = await this._translateAndParse(failed, systemPrompt, 'claude-code', apiKey, model, retryMaxTokens, translationMap);
       if (stillFailed.length > 0) {
         console.warn(`[UdemyTranslator:claude-code] ${stillFailed.length} texts failed after retry`);
-      }
-    }
-
-    return translationMap;
-  }
-
-  /**
-   * Ollama 전략: 소청크, 딜레이 없음, 실패분 최대 2회 재시도
-   * @private
-   */
-  async _translateOllama(uniqueTexts, systemPrompt, apiKey, model) {
-    const translationMap = {};
-
-    for (let start = 0; start < uniqueTexts.length; start += OLLAMA_CHUNK_SIZE) {
-      const chunk = uniqueTexts.slice(start, start + OLLAMA_CHUNK_SIZE);
-      const maxTokens = Math.max(4096, chunk.length * 400);
-
-      let remaining = chunk;
-      const maxRetries = 2;
-
-      for (let attempt = 0; attempt <= maxRetries && remaining.length > 0; attempt++) {
-        if (attempt > 0) {
-          console.log(`[UdemyTranslator:Ollama] Retry ${attempt}/${maxRetries} for ${remaining.length} texts`);
-        }
-
-        const failed = await this._translateAndParse(remaining, systemPrompt, 'ollama', apiKey, model, maxTokens, translationMap);
-        remaining = failed;
-      }
-
-      if (remaining.length > 0) {
-        console.warn(`[UdemyTranslator:Ollama] ${remaining.length} texts failed after retries`);
       }
     }
 
@@ -221,11 +185,13 @@ export class TranslationService {
     const parsed = parseBatchResponse(responseText, texts.length);
     console.log(`[UdemyTranslator:${provider}] Parsed ${parsed.size}/${texts.length} lines`);
 
-    // 응답 줄 수가 입력보다 많으면 밀림 가능성 → 전체 실패 처리
-    const rawLineCount = responseText.split('\n').filter(l => l.trim()).length;
-    if (rawLineCount > texts.length) {
-      console.warn(`[UdemyTranslator:${provider}] Response has ${rawLineCount} lines for ${texts.length} inputs — likely shifted, rejecting all`);
-      return [...texts];
+    // 응답 줄 수가 입력보다 많으면 밀림 가능성 → 전체 실패 처리 (소형 모델 전용, claude-code는 스킵)
+    if (provider !== 'claude-code') {
+      const rawLineCount = responseText.split('\n').filter(l => l.trim()).length;
+      if (rawLineCount > texts.length) {
+        console.warn(`[UdemyTranslator:${provider}] Response has ${rawLineCount} lines for ${texts.length} inputs — likely shifted, rejecting all`);
+        return [...texts];
+      }
     }
 
     // 중복 번역 감지: 다른 원본인데 같은 번역이면 의심

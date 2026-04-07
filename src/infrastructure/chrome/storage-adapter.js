@@ -10,8 +10,8 @@
 export async function getProviderConfig() {
   const stored = await chrome.storage.local.get([
     'provider',
-    'claudeApiKey', 'geminiApiKey', 'ollamaUrl', 'claudeCodeUrl',
-    'claudeModel', 'geminiModel', 'ollamaModel', 'claudeCodeModel',
+    'claudeApiKey', 'geminiApiKey', 'claudeCodeUrl',
+    'claudeModel', 'geminiModel', 'claudeCodeModel',
     'apiKey', 'model' // legacy
   ]);
 
@@ -21,9 +21,6 @@ export async function getProviderConfig() {
   if (provider === 'gemini') {
     apiKey = stored.geminiApiKey;
     model = stored.geminiModel || stored.model || 'gemini-2.5-flash';
-  } else if (provider === 'ollama') {
-    apiKey = stored.ollamaUrl || 'http://localhost:11434';
-    model = stored.ollamaModel || 'exaone3.5:7.8b';
   } else if (provider === 'claude-code') {
     apiKey = stored.claudeCodeUrl || 'http://localhost:3456';
     model = stored.claudeCodeModel || 'claude-sonnet-4-6';

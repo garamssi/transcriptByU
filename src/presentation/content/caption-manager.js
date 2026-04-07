@@ -1,5 +1,6 @@
 import { SELECTORS, CAPTION_SELECTOR } from '../../domain/constants.js';
 import { currentStyle } from './style-manager.js';
+import { getVttTranslation } from './vtt-bridge.js';
 
 let captionObserver = null;
 let captionFinderObserver = null;
@@ -29,7 +30,7 @@ export function replaceCaptionText(captionEl) {
   if (!originalText) return;
 
   const translationMap = buildTranslationMap();
-  const translated = translationMap.get(originalText);
+  const translated = translationMap.get(originalText) || getVttTranslation(originalText);
   if (!translated) return;
 
   captionReplacePaused = true;

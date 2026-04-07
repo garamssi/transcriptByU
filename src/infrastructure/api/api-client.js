@@ -1,14 +1,13 @@
 import { callClaude } from './claude-client.js';
 import { callGemini } from './gemini-client.js';
-import { callOllama } from './ollama-client.js';
 import { callClaudeCode } from './claude-code-client.js';
 
 /**
  * Provider에 따라 적절한 API를 호출한다.
  * @param {string} systemPrompt - 시스템 프롬프트
  * @param {string} userText - 사용자 입력
- * @param {string} provider - 'claude' | 'gemini' | 'ollama' | 'claude-code'
- * @param {string} apiKey - API 키 (ollama/claude-code의 경우 서버 URL)
+ * @param {string} provider - 'claude' | 'gemini' | 'claude-code'
+ * @param {string} apiKey - API 키 (claude-code의 경우 서버 URL)
  * @param {string} model - 모델 ID
  * @param {number} maxTokens - 최대 토큰 수
  * @returns {Promise<string>} 응답 텍스트
@@ -16,9 +15,6 @@ import { callClaudeCode } from './claude-code-client.js';
 export function callApi(systemPrompt, userText, provider, apiKey, model, maxTokens) {
   if (provider === 'gemini') {
     return callGemini(systemPrompt, userText, apiKey, model, maxTokens);
-  }
-  if (provider === 'ollama') {
-    return callOllama(systemPrompt, userText, apiKey, model);
   }
   if (provider === 'claude-code') {
     return callClaudeCode(systemPrompt, userText, apiKey, model);

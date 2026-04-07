@@ -6,6 +6,7 @@ import {
 } from './src/presentation/content/transcript-manager.js';
 import { initCaptionFinder } from './src/presentation/content/caption-manager.js';
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
+import { initVttBridge } from './src/presentation/content/vtt-bridge.js';
 
 // === storage 변경 감지 → 즉시 스타일 반영 ===
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -49,6 +50,7 @@ console.log('[UdemyTranslator] content script loaded');
 loadStyle().then(() => {
   console.log('[UdemyTranslator] style loaded, initializing...');
   updateDynamicStyles();
+  initVttBridge();
   initPanelFinder();
   initCaptionFinder();
 }).catch(err => {

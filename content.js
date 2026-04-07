@@ -4,14 +4,14 @@
     PROVIDER: "provider",
     CLAUDE_API_KEY: "claudeApiKey",
     GEMINI_API_KEY: "geminiApiKey",
-    OLLAMA_URL: "ollamaUrl",
+    CLAUDE_CODE_URL: "claudeCodeUrl",
     API_KEY: "apiKey",
     // legacy
     MODEL: "model",
     // legacy
     CLAUDE_MODEL: "claudeModel",
     GEMINI_MODEL: "geminiModel",
-    OLLAMA_MODEL: "ollamaModel",
+    CLAUDE_CODE_MODEL: "claudeCodeModel",
     ENABLED: "enabled",
     TARGET_LANG: "targetLang",
     DISPLAY_MODE: "displayMode",
@@ -22,11 +22,8 @@
     STYLE_BG_OPACITY: "styleBgOpacity",
     STYLE_EXPANDED: "styleExpanded"
   };
-  var CHUNK_SIZE = 40;
-  var OLLAMA_CHUNK_SIZE = 5;
   var SELECTORS = {
     panel: '[data-purpose="transcript-panel"]',
-    cueActive: 'p[data-purpose="transcript-cue-active"]',
     cueAll: 'p[data-purpose="transcript-cue"], p[data-purpose="transcript-cue-active"]',
     cueText: 'span[data-purpose="cue-text"]'
   };
@@ -90,33 +87,22 @@
     }
     const bgCaption = currentStyle.bgEnabled ? `background-color: ${hexToRgba(currentStyle.bgColor, currentStyle.bgOpacity)} !important; padding: 4px 10px !important; border-radius: 4px !important;` : "";
     styleEl.textContent = `
-    /* \uBC88\uC5ED\uB41C cue-text \uC2A4\uD0C0\uC77C (\uD2B8\uB79C\uC2A4\uD06C\uB9BD\uD2B8 \uD328\uB110) \u2014 \uD770 \uBC30\uACBD\uC774\uBBC0\uB85C \uAC80\uC740 \uAE00\uC528 */
     ${SELECTORS.cueText}[data-original] {
       font-size: ${currentStyle.fontSize}px !important;
       color: #1a1a1a !important;
     }
-    /* \uBE44\uB514\uC624 \uCEA1\uC158 \uC2A4\uD0C0\uC77C \u2014 \uC5B4\uB450\uC6B4 \uBC30\uACBD + \uBC1D\uC740 \uAE00\uC528 */
     ${CAPTION_SELECTOR} {
       font-size: ${currentStyle.fontSize * 1.5}px !important;
       color: ${currentStyle.fontColor} !important;
       opacity: 1 !important;
       ${bgCaption}
     }
-    /* \uC6D0\uBCF8 \uD14D\uC2A4\uD2B8 (both \uBAA8\uB4DC\uC5D0\uC11C \uBCF4\uC870 \uD45C\uC2DC) */
     .${ORIGINAL_CLASS} {
       font-size: 11px !important;
       color: #999 !important;
       display: block;
       margin-top: 2px;
     }
-    .${ORIGINAL_CLASS}.loading {
-      color: #999 !important;
-      font-style: italic;
-    }
-    .${ORIGINAL_CLASS}.error {
-      color: #e74c3c !important;
-    }
-    /* \uCEA1\uC158 both \uBAA8\uB4DC: \uC6D0\uBCF8 \uD14D\uC2A4\uD2B8 (\uBC88\uC5ED \uC544\uB798 \uC791\uAC8C \uD45C\uC2DC) */
     .caption-original {
       font-size: ${Math.round(currentStyle.fontSize * 1.1)}px !important;
       color: rgba(255, 255, 255, 0.6) !important;
@@ -125,18 +111,91 @@
   `;
   }
 
-  // src/domain/error-messages.js
-  function errorToMessage(error) {
-    if (!error) return "\u26A0 \uBC88\uC5ED \uC2E4\uD328";
-    if (error === "RATE_LIMIT") return "\u26A0 API \uD560\uB2F9\uB7C9 \uCD08\uACFC";
-    if (error === "NO_API_KEY") return "\u26A0 API \uD0A4\uB97C \uC124\uC815\uD558\uC138\uC694";
-    if (error === "DISABLED") return "";
-    if (error === "PARSE_ERROR") return "\u26A0 \uC751\uB2F5 \uD30C\uC2F1 \uC2E4\uD328";
-    if (error.startsWith("API_ERROR:")) {
-      const parts = error.split(":");
-      return `\u26A0 API \uC624\uB958 (${parts[1]})`;
+  // src/infrastructure/vtt/vtt-parser.js
+  function decodeHtmlEntities(str) {
+    var el = document.createElement("textarea");
+    el.innerHTML = str;
+    return el.value;
+  }
+  function parseVtt(vttText) {
+    var cleaned = vttText.replace(/^\uFEFF/, "");
+    var blocks = cleaned.split(/\n\s*\n/).filter(function(b) { return b.trim(); });
+    var cues = [];
+    for (var _i = 0; _i < blocks.length; _i++) {
+      var block = blocks[_i];
+      var lines = block.trim().split("\n");
+      var timestampIdx = -1;
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].includes("-->")) { timestampIdx = i; break; }
+      }
+      if (timestampIdx === -1) continue;
+      var timeParts = lines[timestampIdx].split("-->");
+      if (timeParts.length < 2) continue;
+      var startTime = timeParts[0].trim();
+      var endTime = timeParts[1].trim().split(/\s/)[0];
+      var textLines = lines.slice(timestampIdx + 1);
+      var raw = textLines.join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      var text = decodeHtmlEntities(raw);
+      if (text) cues.push({ startTime: startTime, endTime: endTime, text: text });
     }
-    return `\u26A0 ${error}`;
+    return cues;
+  }
+
+  // src/presentation/content/vtt-bridge.js
+  var vttTranslationStore = /* @__PURE__ */ new Map();
+  var processedUrls = /* @__PURE__ */ new Set();
+  var vttReady = false;
+  var vttPending = false;
+  function initVttBridge() {
+    window.addEventListener("message", async function(event) {
+      if (event.source !== window) return;
+      if (event.data?.type !== "UDEMY_VTT_CAPTURED") return;
+      var vttText = event.data.vttText;
+      var url = event.data.url;
+      if (processedUrls.has(url)) return;
+      processedUrls.add(url);
+      console.log("[UdemyTranslator:VTT] captured: " + url);
+      vttPending = true;
+      try {
+        var cues = parseVtt(vttText);
+        if (cues.length === 0) { console.warn("[UdemyTranslator:VTT] no cues parsed"); return; }
+        var uniqueTexts = [...new Set(cues.map(function(c) { return c.text; }))];
+        console.log("[UdemyTranslator:VTT] " + cues.length + " cues, " + uniqueTexts.length + " unique texts");
+        var ctx = getLectureContext();
+        var response = await chrome.runtime.sendMessage({
+          type: "TRANSLATE_BATCH",
+          texts: uniqueTexts,
+          lecture: ctx.lecture,
+          section: ctx.section
+        });
+        if (response?.error) { console.error("[UdemyTranslator:VTT] translation error: " + response.error); return; }
+        var results = response?.results || [];
+        for (var i = 0; i < uniqueTexts.length; i++) {
+          if (results[i]?.translation) {
+            vttTranslationStore.set(uniqueTexts[i], results[i].translation);
+          }
+        }
+        vttReady = true;
+        console.log("[UdemyTranslator:VTT] " + vttTranslationStore.size + "/" + uniqueTexts.length + " translations stored");
+        document.dispatchEvent(new Event("vtt-translations-ready"));
+      } catch (err) {
+        console.error("[UdemyTranslator:VTT] error: " + err.message);
+      } finally {
+        vttPending = false;
+      }
+    });
+  }
+  function getVttTranslation(text) {
+    return vttTranslationStore.get(text) || null;
+  }
+  function isVttPending() {
+    return vttPending;
+  }
+  function clearVttStore() {
+    vttTranslationStore.clear();
+    processedUrls.clear();
+    vttReady = false;
+    vttPending = false;
   }
 
   // src/presentation/content/caption-manager.js
@@ -160,7 +219,7 @@
     const originalText = subSpan ? captionEl.childNodes[0]?.textContent?.trim() || captionEl.textContent.trim() : captionEl.textContent.trim();
     if (!originalText) return;
     const translationMap = buildTranslationMap();
-    const translated = translationMap.get(originalText);
+    const translated = translationMap.get(originalText) || getVttTranslation(originalText);
     if (!translated) return;
     captionReplacePaused = true;
     if (currentStyle.displayMode === "both") {
@@ -209,7 +268,7 @@
       subtree: true
     });
   }
-  function cleanup() {
+  function cleanupCaption() {
     if (captionObserver) captionObserver.disconnect();
     if (captionFinderObserver) captionFinderObserver.disconnect();
     currentCaptionEl = null;
@@ -219,7 +278,6 @@
   var observer = null;
   var panelFinderObserver = null;
   var currentPanel = null;
-  var isBatchTranslating = false;
   var settleTimer = null;
   var observerPaused = false;
   function getLectureContext() {
@@ -292,11 +350,16 @@
     return items;
   }
   function getUntranslatedCues(cueItems) {
-    return cueItems.filter(({ textSpan }) => {
+    return cueItems.filter(({ text, textSpan, container }) => {
       if (textSpan.dataset.original) return false;
       const parent = textSpan.closest("p") || textSpan.parentElement;
       const origEl = parent.querySelector(`.${ORIGINAL_CLASS}`);
       if (origEl) return false;
+      const vttTranslation = getVttTranslation(text);
+      if (vttTranslation) {
+        applyTranslation(textSpan, container, vttTranslation);
+        return false;
+      }
       return true;
     });
   }
@@ -310,116 +373,25 @@
     }
     const originalEl = getOrCreateOriginalEl(textSpan);
     originalEl.textContent = textSpan.dataset.original;
-    originalEl.classList.remove("loading", "error");
     applyDisplayMode(container);
   }
-  function applyLoading(textSpan, container, msg) {
-    const originalEl = getOrCreateOriginalEl(textSpan);
-    originalEl.textContent = msg;
-    originalEl.classList.add("loading");
-    originalEl.classList.remove("error");
-  }
-  function applyError(textSpan, container, errorMsg) {
-    const originalEl = getOrCreateOriginalEl(textSpan);
-    originalEl.textContent = errorMsg;
-    originalEl.classList.remove("loading");
-    originalEl.classList.add("error");
-  }
-  function buildTextToCueMap(cueItems) {
-    const map = /* @__PURE__ */ new Map();
-    for (const item of cueItems) {
-      if (!map.has(item.text)) map.set(item.text, []);
-      map.get(item.text).push(item);
-    }
-    return map;
-  }
-  function applyChunkResults(chunkTexts, response, textToCues) {
-    if (!response || response.error) {
-      const errMsg = errorToMessage(response?.error || "UNKNOWN");
-      observerPaused = true;
-      for (const text of chunkTexts) {
-        for (const { textSpan, container } of textToCues.get(text) || []) {
-          applyError(textSpan, container, errMsg);
-        }
-      }
-      observerPaused = false;
-      return;
-    }
-    const results = response.results || [];
-    observerPaused = true;
-    for (let i = 0; i < chunkTexts.length; i++) {
-      const result = results[i];
-      for (const { textSpan, container } of textToCues.get(chunkTexts[i]) || []) {
-        if (result?.translation) {
-          applyTranslation(textSpan, container, result.translation);
-        } else {
-          applyError(textSpan, container, errorToMessage(result?.error));
-        }
-      }
-    }
-    observerPaused = false;
-    const captionEl = document.querySelector(CAPTION_SELECTOR);
-    if (captionEl) replaceCaptionText(captionEl);
-  }
-  async function translateAllCues(panel) {
-    if (isBatchTranslating) return;
-    isBatchTranslating = true;
+  function applyVttTranslations(panel) {
     const cueItems = collectCues(panel);
-    const untranslated = getUntranslatedCues(cueItems);
-    console.log(`[UdemyTranslator] translateAllCues: total=${cueItems.length}, untranslated=${untranslated.length}`);
-    if (untranslated.length === 0) {
-      isBatchTranslating = false;
-      return;
-    }
-    const uniqueTexts = [...new Set(untranslated.map((c) => c.text))];
-    const textToCues = buildTextToCueMap(untranslated);
     observerPaused = true;
-    for (const { textSpan, container } of untranslated) {
-      applyLoading(textSpan, container, "\uBC88\uC5ED \uC911...");
-    }
+    const untranslated = getUntranslatedCues(cueItems);
     observerPaused = false;
-    const { provider } = await chrome.storage.local.get(STORAGE_KEYS.PROVIDER);
-    const chunkSize = (provider || "ollama") === "ollama" ? OLLAMA_CHUNK_SIZE : CHUNK_SIZE;
-    const chunks = [];
-    for (let i = 0; i < uniqueTexts.length; i += chunkSize) {
-      chunks.push(uniqueTexts.slice(i, i + chunkSize));
-    }
-    const ctx = getLectureContext();
-    console.log(`[UdemyTranslator] ${uniqueTexts.length} texts \u2192 ${chunks.length} chunks (size=${chunkSize})`);
-    for (let idx = 0; idx < chunks.length; idx++) {
-      const chunk = chunks[idx];
-      try {
-        const response = await chrome.runtime.sendMessage({
-          type: "TRANSLATE_BATCH",
-          texts: chunk,
-          lecture: ctx.lecture,
-          section: ctx.section
-        });
-        applyChunkResults(chunk, response, textToCues);
-        console.log(`[UdemyTranslator] Chunk ${idx + 1}/${chunks.length} applied`);
-      } catch (err) {
-        observerPaused = true;
-        for (const text of chunk) {
-          for (const { textSpan, container } of textToCues.get(text) || []) {
-            applyError(textSpan, container, "\u26A0 \uC5F0\uACB0 \uC624\uB958");
-          }
-        }
-        observerPaused = false;
-      }
-    }
-    isBatchTranslating = false;
-    const remaining = getUntranslatedCues(collectCues(panel));
-    if (remaining.length > 0) {
-      scheduleTranslation(panel);
+    if (untranslated.length === 0) {
+      const captionEl = document.querySelector(CAPTION_SELECTOR);
+      if (captionEl) replaceCaptionText(captionEl);
     }
   }
+  document.addEventListener("vtt-translations-ready", function() {
+    if (currentPanel) scheduleTranslation(currentPanel);
+  });
   function scheduleTranslation(panel) {
     clearTimeout(settleTimer);
     settleTimer = setTimeout(() => {
-      const untranslated = getUntranslatedCues(collectCues(panel));
-      if (untranslated.length > 0) {
-        translateAllCues(panel);
-      }
+      applyVttTranslations(panel);
     }, SETTLE_DELAY_MS);
   }
   function initPanel(panel) {
@@ -428,7 +400,7 @@
     currentPanel = panel;
     scheduleTranslation(panel);
     observer = new MutationObserver((mutations) => {
-      if (observerPaused || isBatchTranslating) return;
+      if (observerPaused) return;
       const hasNewCue = mutations.some(
         (m) => m.type === "childList" && Array.from(m.addedNodes).some(
           (n) => n.nodeType === 1 && (n.matches?.('[class*="cue-container"]') || n.querySelector?.('[data-purpose="cue-text"]'))
@@ -482,15 +454,12 @@
     const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG]);
     const lang = stored[STORAGE_KEYS.TARGET_LANG] || "\uD55C\uAD6D\uC5B4";
     const ctx = getLectureContext();
-    // 1) 현재 강의 캐시 삭제 (L1 + L2)
     await chrome.runtime.sendMessage({
       type: "CLEAR_LECTURE_CACHE",
       lang,
       lecture: ctx.lecture,
       section: ctx.section
     });
-    console.log("[UdemyTranslator] retranslateAll: lecture cache cleared");
-    // 2) DOM에서 번역 상태 초기화 (원본 복원)
     observerPaused = true;
     for (const { textSpan } of cueItems) {
       if (textSpan.dataset.original) {
@@ -502,25 +471,22 @@
       parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach((el) => el.remove());
     }
     observerPaused = false;
-    // 3) 일반 번역 흐름으로 전체 재번역
-    await translateAllCues(panel);
+    applyVttTranslations(panel);
     const translated = collectCues(panel).filter(({ textSpan }) => textSpan.dataset.original);
-    const count = translated.length;
-    console.log(`[UdemyTranslator] retranslateAll: ${count} items translated`);
-    return { count };
+    return { count: translated.length };
   }
-  function cleanup2() {
+  function cleanupTranscript() {
     if (observer) observer.disconnect();
     if (panelFinderObserver) panelFinderObserver.disconnect();
     currentPanel = null;
     clearTimeout(settleTimer);
-    isBatchTranslating = false;
   }
 
   // src/presentation/content/navigation-handler.js
   function onNavigate() {
-    cleanup2();
-    cleanup();
+    clearVttStore();
+    cleanupTranscript();
+    cleanupCaption();
     setTimeout(() => {
       initPanelFinder();
       initCaptionFinder();
@@ -578,6 +544,7 @@
   loadStyle().then(() => {
     console.log("[UdemyTranslator] style loaded, initializing...");
     updateDynamicStyles();
+    initVttBridge();
     initPanelFinder();
     initCaptionFinder();
   }).catch((err) => {

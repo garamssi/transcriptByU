@@ -40,35 +40,3 @@ Output:
   return prompt;
 }
 
-/**
- * Ollama 전용 경량 시스템 프롬프트를 생성한다.
- * 토큰 수를 최소화하여 로컬 LLM 추론 속도를 높인다.
- * @param {string} targetLang - 번역 대상 언어
- * @param {{ section?: string, lecture?: string }} [context] - 강의 컨텍스트
- * @returns {string} 시스템 프롬프트
- */
-export function buildOllamaSystemPrompt(targetLang, context) {
-  const langMap = { '한국어': 'Korean', '日本語': 'Japanese', '中文': 'Chinese' };
-  const langEnglish = langMap[targetLang] || targetLang;
-
-  let prompt = `You are a line-by-line subtitle translator. Each input line has a number and pipe separator.
-You MUST output the SAME number of lines with the SAME numbers. Do NOT merge or split lines.
-
-Format: "N|text" → "N|translated"
-
-CRITICAL RULES:
-- One input line = one output line. NEVER combine two input lines into one output
-- Keep the EXACT same line number N from input
-- Translate ONLY the text after the pipe to ${langEnglish}
-- Output NOTHING else — no notes, no comments, no explanations
-- If a sentence is cut off or incomplete, translate it as-is
-- ${langEnglish} ONLY`;
-
-  if (context?.section) {
-    prompt += ` Course: "${context.section}"`;
-    if (context.lecture) prompt += `, "${context.lecture}"`;
-    prompt += `.`;
-  }
-
-  return prompt;
-}

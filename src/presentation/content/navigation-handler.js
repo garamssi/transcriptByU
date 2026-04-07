@@ -1,10 +1,12 @@
 import { cleanup as cleanupTranscript, initPanelFinder } from './transcript-manager.js';
 import { cleanup as cleanupCaption, initCaptionFinder } from './caption-manager.js';
+import { clearVttStore } from './vtt-bridge.js';
 
 /**
  * SPA 네비게이션 대응: Observer 해제 후 재초기화
  */
 function onNavigate() {
+  clearVttStore();
   cleanupTranscript();
   cleanupCaption();
   setTimeout(() => {
