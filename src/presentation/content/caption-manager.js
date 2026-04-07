@@ -5,22 +5,21 @@ import { getVttTranslation } from './vtt-bridge.js';
 let captionObserver = null;
 let captionFinderObserver = null;
 let currentCaptionEl = null;
-let captionReplacePaused = false;
 
-// === 번역 맵 구축: 원본 텍스트 → 번역 텍스트 (트랜스크립트 패널 기반) ===
-function buildTranslationMap() {
-  const map = new Map();
-  document.querySelectorAll(`${SELECTORS.cueText}[data-translated]`).forEach(span => {
-    if (span.dataset.original && span.dataset.translated) {
-      map.set(span.dataset.original.trim(), span.dataset.translated);
-    }
-  });
-  return map;
+// === 번역 맵 캐시: applyTranslation() 시점에 업데이트, DOM 스캔 불필요 ===
+const translationMapCache = new Map();
+
+export function updateCaptionCache(original, translated) {
+  translationMapCache.set(original, translated);
+}
+
+export function clearCaptionCache() {
+  translationMapCache.clear();
 }
 
 // === 캡션 텍스트를 번역으로 치환 ===
 export function replaceCaptionText(captionEl) {
-  if (!captionEl || captionReplacePaused) return;
+  if (!captionEl) return;
   if (currentStyle.displayMode === 'original') return;
 
   const subSpan = captionEl.querySelector('.caption-original');
@@ -29,11 +28,12 @@ export function replaceCaptionText(captionEl) {
     : captionEl.textContent.trim();
   if (!originalText) return;
 
-  const translationMap = buildTranslationMap();
-  const translated = translationMap.get(originalText) || getVttTranslation(originalText);
+  const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
   if (!translated) return;
 
-  captionReplacePaused = true;
+  // observer를 일시 중지하여 자기 트리거 루프 방지
+  if (captionObserver) captionObserver.disconnect();
+
   if (currentStyle.displayMode === 'both') {
     captionEl.innerHTML = '';
     captionEl.appendChild(document.createTextNode(translated));
@@ -44,7 +44,13 @@ export function replaceCaptionText(captionEl) {
   } else {
     captionEl.textContent = translated;
   }
-  captionReplacePaused = false;
+
+  // observer 재연결
+  if (captionObserver && currentCaptionEl) {
+    captionObserver.observe(currentCaptionEl, {
+      childList: true, characterData: true, subtree: true
+    });
+  }
 }
 
 // === 캡션 요소에 MutationObserver 부착 ===

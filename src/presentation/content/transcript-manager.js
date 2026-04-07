@@ -1,13 +1,22 @@
 import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR, STORAGE_KEYS } from '../../domain/constants.js';
 import { currentStyle } from './style-manager.js';
-import { replaceCaptionText } from './caption-manager.js';
+import { replaceCaptionText, updateCaptionCache, clearCaptionCache } from './caption-manager.js';
 import { getVttTranslation } from './vtt-bridge.js';
 
 let observer = null;
 let panelFinderObserver = null;
 let currentPanel = null;
 let settleTimer = null;
-let observerPaused = false;
+
+const PANEL_OBSERVE_OPTS = { childList: true, subtree: true };
+
+function pauseObserver() {
+  if (observer) observer.disconnect();
+}
+
+function resumeObserver() {
+  if (observer && currentPanel) observer.observe(currentPanel, PANEL_OBSERVE_OPTS);
+}
 
 // === 강의 컨텍스트 추출 ===
 export function getLectureContext() {
@@ -51,12 +60,12 @@ export function applyDisplayMode(container) {
 export function applyDisplayModeAll() {
   const panel = document.querySelector(SELECTORS.panel);
   if (!panel) return;
-  observerPaused = true;
+  pauseObserver();
   panel.querySelectorAll(SELECTORS.cueAll).forEach(cue => {
     const container = cue.closest('[class*="cue-container"]') || cue;
     applyDisplayMode(container);
   });
-  observerPaused = false;
+  resumeObserver();
 }
 
 // === 원본 표시 span 생성/가져오기 (both 모드용) ===
@@ -116,6 +125,9 @@ export function applyTranslation(textSpan, container, translation) {
   }
   textSpan.dataset.translated = translation;
 
+  // 캡션 번역 캐시 업데이트 (DOM 스캔 방지)
+  updateCaptionCache(textSpan.dataset.original, translation);
+
   if (currentStyle.displayMode !== 'original') {
     textSpan.textContent = translation;
   }
@@ -127,15 +139,21 @@ export function applyTranslation(textSpan, container, translation) {
 }
 
 // === VTT 번역을 DOM에 적용 ===
+let isApplying = false;
 function applyVttTranslations(panel) {
-  const cueItems = collectCues(panel);
-  observerPaused = true;
-  const untranslated = getUntranslatedCues(cueItems);
-  observerPaused = false;
+  if (isApplying) return;
+  isApplying = true;
+  pauseObserver();
 
-  if (untranslated.length === 0) {
+  try {
+    const cueItems = collectCues(panel);
+    getUntranslatedCues(cueItems);
+
     const captionEl = document.querySelector(CAPTION_SELECTOR);
     if (captionEl) replaceCaptionText(captionEl);
+  } finally {
+    resumeObserver();
+    isApplying = false;
   }
 }
 
@@ -162,8 +180,6 @@ function initPanel(panel) {
   scheduleTranslation(panel);
 
   observer = new MutationObserver((mutations) => {
-    if (observerPaused) return;
-
     const hasNewCue = mutations.some(m =>
       m.type === 'childList' &&
       Array.from(m.addedNodes).some(n =>
@@ -178,10 +194,7 @@ function initPanel(panel) {
     }
   });
 
-  observer.observe(panel, {
-    childList: true,
-    subtree: true
-  });
+  observer.observe(panel, PANEL_OBSERVE_OPTS);
 }
 
 // === 트랜스크립트 패널 등장 감시 ===
@@ -193,7 +206,16 @@ export function initPanelFinder() {
   console.log('[UdemyTranslator] initPanelFinder, panel:', existing ? 'FOUND' : 'NOT FOUND');
   if (existing) initPanel(existing);
 
-  panelFinderObserver = new MutationObserver(() => {
+  panelFinderObserver = new MutationObserver((mutations) => {
+    const relevant = mutations.some(m =>
+      [...m.addedNodes, ...m.removedNodes].some(n =>
+        n.nodeType === 1 &&
+        (n.matches?.('[data-purpose="transcript-panel"]') ||
+         n.querySelector?.('[data-purpose="transcript-panel"]'))
+      )
+    );
+    if (!relevant) return;
+
     const panel = document.querySelector(SELECTORS.panel);
     if (panel) {
       initPanel(panel);
@@ -211,14 +233,15 @@ export function initPanelFinder() {
 
 // === 모든 번역 제거 (원본 복원) ===
 export function removeAllTranslations() {
-  observerPaused = true;
+  pauseObserver();
   document.querySelectorAll(`${SELECTORS.cueText}[data-original]`).forEach(span => {
     span.textContent = span.dataset.original;
     delete span.dataset.original;
     delete span.dataset.translated;
   });
   document.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach(el => el.remove());
-  observerPaused = false;
+  clearCaptionCache();
+  resumeObserver();
 }
 
 // === 전체 재번역 ===
@@ -241,7 +264,7 @@ export async function retranslateAll() {
     section: ctx.section
   });
 
-  observerPaused = true;
+  pauseObserver();
   for (const { textSpan } of cueItems) {
     if (textSpan.dataset.original) {
       textSpan.textContent = textSpan.dataset.original;
@@ -251,7 +274,7 @@ export async function retranslateAll() {
     const parent = textSpan.closest('p') || textSpan.parentElement;
     parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach(el => el.remove());
   }
-  observerPaused = false;
+  resumeObserver();
 
   applyVttTranslations(panel);
 
@@ -265,4 +288,5 @@ export function cleanup() {
   if (panelFinderObserver) panelFinderObserver.disconnect();
   currentPanel = null;
   clearTimeout(settleTimer);
+  clearCaptionCache();
 }

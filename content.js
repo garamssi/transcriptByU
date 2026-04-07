@@ -87,22 +87,33 @@
     }
     const bgCaption = currentStyle.bgEnabled ? `background-color: ${hexToRgba(currentStyle.bgColor, currentStyle.bgOpacity)} !important; padding: 4px 10px !important; border-radius: 4px !important;` : "";
     styleEl.textContent = `
+    /* \uBC88\uC5ED\uB41C cue-text \uC2A4\uD0C0\uC77C (\uD2B8\uB79C\uC2A4\uD06C\uB9BD\uD2B8 \uD328\uB110) \u2014 \uD770 \uBC30\uACBD\uC774\uBBC0\uB85C \uAC80\uC740 \uAE00\uC528 */
     ${SELECTORS.cueText}[data-original] {
       font-size: ${currentStyle.fontSize}px !important;
       color: #1a1a1a !important;
     }
+    /* \uBE44\uB514\uC624 \uCEA1\uC158 \uC2A4\uD0C0\uC77C \u2014 \uC5B4\uB450\uC6B4 \uBC30\uACBD + \uBC1D\uC740 \uAE00\uC528 */
     ${CAPTION_SELECTOR} {
       font-size: ${currentStyle.fontSize * 1.5}px !important;
       color: ${currentStyle.fontColor} !important;
       opacity: 1 !important;
       ${bgCaption}
     }
+    /* \uC6D0\uBCF8 \uD14D\uC2A4\uD2B8 (both \uBAA8\uB4DC\uC5D0\uC11C \uBCF4\uC870 \uD45C\uC2DC) */
     .${ORIGINAL_CLASS} {
       font-size: 11px !important;
       color: #999 !important;
       display: block;
       margin-top: 2px;
     }
+    .${ORIGINAL_CLASS}.loading {
+      color: #999 !important;
+      font-style: italic;
+    }
+    .${ORIGINAL_CLASS}.error {
+      color: #e74c3c !important;
+    }
+    /* \uCEA1\uC158 both \uBAA8\uB4DC: \uC6D0\uBCF8 \uD14D\uC2A4\uD2B8 (\uBC88\uC5ED \uC544\uB798 \uC791\uAC8C \uD45C\uC2DC) */
     .caption-original {
       font-size: ${Math.round(currentStyle.fontSize * 1.1)}px !important;
       color: rgba(255, 255, 255, 0.6) !important;
@@ -112,31 +123,35 @@
   }
 
   // src/infrastructure/vtt/vtt-parser.js
+  var _decoder = document.createElement("textarea");
   function decodeHtmlEntities(str) {
-    var el = document.createElement("textarea");
-    el.innerHTML = str;
-    return el.value;
+    _decoder.innerHTML = str;
+    return _decoder.value;
   }
   function parseVtt(vttText) {
-    var cleaned = vttText.replace(/^\uFEFF/, "");
-    var blocks = cleaned.split(/\n\s*\n/).filter(function(b) { return b.trim(); });
-    var cues = [];
-    for (var _i = 0; _i < blocks.length; _i++) {
-      var block = blocks[_i];
-      var lines = block.trim().split("\n");
-      var timestampIdx = -1;
-      for (var i = 0; i < lines.length; i++) {
-        if (lines[i].includes("-->")) { timestampIdx = i; break; }
+    const cleaned = vttText.replace(/^\uFEFF/, "");
+    const blocks = cleaned.split(/\n\s*\n/).filter((b) => b.trim());
+    const cues = [];
+    for (const block of blocks) {
+      const lines = block.trim().split("\n");
+      let timestampIdx = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes("-->")) {
+          timestampIdx = i;
+          break;
+        }
       }
       if (timestampIdx === -1) continue;
-      var timeParts = lines[timestampIdx].split("-->");
+      const timeParts = lines[timestampIdx].split("-->");
       if (timeParts.length < 2) continue;
-      var startTime = timeParts[0].trim();
-      var endTime = timeParts[1].trim().split(/\s/)[0];
-      var textLines = lines.slice(timestampIdx + 1);
-      var raw = textLines.join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-      var text = decodeHtmlEntities(raw);
-      if (text) cues.push({ startTime: startTime, endTime: endTime, text: text });
+      const startTime = timeParts[0].trim();
+      const endTime = timeParts[1].trim().split(/\s/)[0];
+      const textLines = lines.slice(timestampIdx + 1);
+      const raw = textLines.join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      const text = decodeHtmlEntities(raw);
+      if (text) {
+        cues.push({ startTime, endTime, text });
+      }
     }
     return cues;
   }
@@ -146,38 +161,43 @@
   var processedUrls = /* @__PURE__ */ new Set();
   var vttPending = false;
   function initVttBridge() {
-    window.addEventListener("message", async function(event) {
+    window.addEventListener("message", async (event) => {
       if (event.source !== window) return;
       if (event.data?.type !== "UDEMY_VTT_CAPTURED") return;
-      var vttText = event.data.vttText;
-      var url = event.data.url;
+      const { vttText, url } = event.data;
       if (processedUrls.has(url)) return;
       processedUrls.add(url);
-      console.log("[UdemyTranslator:VTT] captured: " + url);
+      console.log(`[UdemyTranslator:VTT] captured: ${url}`);
       vttPending = true;
       try {
-        var cues = parseVtt(vttText);
-        if (cues.length === 0) { console.warn("[UdemyTranslator:VTT] no cues parsed"); return; }
-        var uniqueTexts = [...new Set(cues.map(function(c) { return c.text; }))];
-        console.log("[UdemyTranslator:VTT] " + cues.length + " cues, " + uniqueTexts.length + " unique texts");
-        var ctx = getLectureContext();
-        var response = await chrome.runtime.sendMessage({
+        const cues = parseVtt(vttText);
+        if (cues.length === 0) {
+          console.warn("[UdemyTranslator:VTT] no cues parsed");
+          return;
+        }
+        const uniqueTexts = [...new Set(cues.map((c) => c.text))];
+        console.log(`[UdemyTranslator:VTT] ${cues.length} cues, ${uniqueTexts.length} unique texts`);
+        const ctx = getLectureContext();
+        const response = await chrome.runtime.sendMessage({
           type: "TRANSLATE_BATCH",
           texts: uniqueTexts,
           lecture: ctx.lecture,
           section: ctx.section
         });
-        if (response?.error) { console.error("[UdemyTranslator:VTT] translation error: " + response.error); return; }
-        var results = response?.results || [];
-        for (var i = 0; i < uniqueTexts.length; i++) {
+        if (response?.error) {
+          console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
+          return;
+        }
+        const results = response?.results || [];
+        for (let i = 0; i < uniqueTexts.length; i++) {
           if (results[i]?.translation) {
             vttTranslationStore.set(uniqueTexts[i], results[i].translation);
           }
         }
-        console.log("[UdemyTranslator:VTT] " + vttTranslationStore.size + "/" + uniqueTexts.length + " translations stored");
+        console.log(`[UdemyTranslator:VTT] ${vttTranslationStore.size}/${uniqueTexts.length} translations stored`);
         document.dispatchEvent(new Event("vtt-translations-ready"));
       } catch (err) {
-        console.error("[UdemyTranslator:VTT] error: " + err.message);
+        console.error(`[UdemyTranslator:VTT] error: ${err.message}`);
       } finally {
         vttPending = false;
       }
@@ -196,26 +216,22 @@
   var captionObserver = null;
   var captionFinderObserver = null;
   var currentCaptionEl = null;
-  var captionReplacePaused = false;
-  function buildTranslationMap() {
-    const map = /* @__PURE__ */ new Map();
-    document.querySelectorAll(`${SELECTORS.cueText}[data-translated]`).forEach((span) => {
-      if (span.dataset.original && span.dataset.translated) {
-        map.set(span.dataset.original.trim(), span.dataset.translated);
-      }
-    });
-    return map;
+  var translationMapCache = /* @__PURE__ */ new Map();
+  function updateCaptionCache(original, translated) {
+    translationMapCache.set(original, translated);
+  }
+  function clearCaptionCache() {
+    translationMapCache.clear();
   }
   function replaceCaptionText(captionEl) {
-    if (!captionEl || captionReplacePaused) return;
+    if (!captionEl) return;
     if (currentStyle.displayMode === "original") return;
     const subSpan = captionEl.querySelector(".caption-original");
     const originalText = subSpan ? captionEl.childNodes[0]?.textContent?.trim() || captionEl.textContent.trim() : captionEl.textContent.trim();
     if (!originalText) return;
-    const translationMap = buildTranslationMap();
-    const translated = translationMap.get(originalText) || getVttTranslation(originalText);
+    const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
     if (!translated) return;
-    captionReplacePaused = true;
+    if (captionObserver) captionObserver.disconnect();
     if (currentStyle.displayMode === "both") {
       captionEl.innerHTML = "";
       captionEl.appendChild(document.createTextNode(translated));
@@ -226,7 +242,13 @@
     } else {
       captionEl.textContent = translated;
     }
-    captionReplacePaused = false;
+    if (captionObserver && currentCaptionEl) {
+      captionObserver.observe(currentCaptionEl, {
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+    }
   }
   function observeCaption(captionEl) {
     if (currentCaptionEl === captionEl && captionObserver) return;
@@ -262,7 +284,7 @@
       subtree: true
     });
   }
-  function cleanupCaption() {
+  function cleanup() {
     if (captionObserver) captionObserver.disconnect();
     if (captionFinderObserver) captionFinderObserver.disconnect();
     currentCaptionEl = null;
@@ -273,7 +295,13 @@
   var panelFinderObserver = null;
   var currentPanel = null;
   var settleTimer = null;
-  var observerPaused = false;
+  var PANEL_OBSERVE_OPTS = { childList: true, subtree: true };
+  function pauseObserver() {
+    if (observer) observer.disconnect();
+  }
+  function resumeObserver() {
+    if (observer && currentPanel) observer.observe(currentPanel, PANEL_OBSERVE_OPTS);
+  }
   function getLectureContext() {
     const result = { lecture: "", section: "" };
     const lectureEl = document.querySelector(LECTURE_SELECTORS.currentItem);
@@ -309,12 +337,12 @@
   function applyDisplayModeAll() {
     const panel = document.querySelector(SELECTORS.panel);
     if (!panel) return;
-    observerPaused = true;
+    pauseObserver();
     panel.querySelectorAll(SELECTORS.cueAll).forEach((cue) => {
       const container = cue.closest('[class*="cue-container"]') || cue;
       applyDisplayMode(container);
     });
-    observerPaused = false;
+    resumeObserver();
   }
   function getOrCreateOriginalEl(textSpan) {
     const next = textSpan.nextElementSibling;
@@ -362,6 +390,7 @@
       textSpan.dataset.original = textSpan.textContent.trim();
     }
     textSpan.dataset.translated = translation;
+    updateCaptionCache(textSpan.dataset.original, translation);
     if (currentStyle.displayMode !== "original") {
       textSpan.textContent = translation;
     }
@@ -369,17 +398,22 @@
     originalEl.textContent = textSpan.dataset.original;
     applyDisplayMode(container);
   }
+  var isApplying = false;
   function applyVttTranslations(panel) {
-    const cueItems = collectCues(panel);
-    observerPaused = true;
-    const untranslated = getUntranslatedCues(cueItems);
-    observerPaused = false;
-    if (untranslated.length === 0) {
+    if (isApplying) return;
+    isApplying = true;
+    pauseObserver();
+    try {
+      const cueItems = collectCues(panel);
+      getUntranslatedCues(cueItems);
       const captionEl = document.querySelector(CAPTION_SELECTOR);
       if (captionEl) replaceCaptionText(captionEl);
+    } finally {
+      resumeObserver();
+      isApplying = false;
     }
   }
-  document.addEventListener("vtt-translations-ready", function() {
+  document.addEventListener("vtt-translations-ready", () => {
     if (currentPanel) scheduleTranslation(currentPanel);
   });
   function scheduleTranslation(panel) {
@@ -394,7 +428,6 @@
     currentPanel = panel;
     scheduleTranslation(panel);
     observer = new MutationObserver((mutations) => {
-      if (observerPaused) return;
       const hasNewCue = mutations.some(
         (m) => m.type === "childList" && Array.from(m.addedNodes).some(
           (n) => n.nodeType === 1 && (n.matches?.('[class*="cue-container"]') || n.querySelector?.('[data-purpose="cue-text"]'))
@@ -404,10 +437,7 @@
         scheduleTranslation(panel);
       }
     });
-    observer.observe(panel, {
-      childList: true,
-      subtree: true
-    });
+    observer.observe(panel, PANEL_OBSERVE_OPTS);
   }
   function initPanelFinder() {
     if (panelFinderObserver) panelFinderObserver.disconnect();
@@ -415,7 +445,13 @@
     const existing = document.querySelector(SELECTORS.panel);
     console.log("[UdemyTranslator] initPanelFinder, panel:", existing ? "FOUND" : "NOT FOUND");
     if (existing) initPanel(existing);
-    panelFinderObserver = new MutationObserver(() => {
+    panelFinderObserver = new MutationObserver((mutations) => {
+      const relevant = mutations.some(
+        (m) => [...m.addedNodes, ...m.removedNodes].some(
+          (n) => n.nodeType === 1 && (n.matches?.('[data-purpose="transcript-panel"]') || n.querySelector?.('[data-purpose="transcript-panel"]'))
+        )
+      );
+      if (!relevant) return;
       const panel = document.querySelector(SELECTORS.panel);
       if (panel) {
         initPanel(panel);
@@ -430,14 +466,15 @@
     });
   }
   function removeAllTranslations() {
-    observerPaused = true;
+    pauseObserver();
     document.querySelectorAll(`${SELECTORS.cueText}[data-original]`).forEach((span) => {
       span.textContent = span.dataset.original;
       delete span.dataset.original;
       delete span.dataset.translated;
     });
     document.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach((el) => el.remove());
-    observerPaused = false;
+    clearCaptionCache();
+    resumeObserver();
   }
   async function retranslateAll() {
     console.log("[UdemyTranslator] retranslateAll() called");
@@ -454,7 +491,7 @@
       lecture: ctx.lecture,
       section: ctx.section
     });
-    observerPaused = true;
+    pauseObserver();
     for (const { textSpan } of cueItems) {
       if (textSpan.dataset.original) {
         textSpan.textContent = textSpan.dataset.original;
@@ -464,23 +501,24 @@
       const parent = textSpan.closest("p") || textSpan.parentElement;
       parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach((el) => el.remove());
     }
-    observerPaused = false;
+    resumeObserver();
     applyVttTranslations(panel);
     const translated = collectCues(panel).filter(({ textSpan }) => textSpan.dataset.original);
     return { count: translated.length };
   }
-  function cleanupTranscript() {
+  function cleanup2() {
     if (observer) observer.disconnect();
     if (panelFinderObserver) panelFinderObserver.disconnect();
     currentPanel = null;
     clearTimeout(settleTimer);
+    clearCaptionCache();
   }
 
   // src/presentation/content/navigation-handler.js
   function onNavigate() {
     clearVttStore();
-    cleanupTranscript();
-    cleanupCaption();
+    cleanup2();
+    cleanup();
     setTimeout(() => {
       initPanelFinder();
       initCaptionFinder();

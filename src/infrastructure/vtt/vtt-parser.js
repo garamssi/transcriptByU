@@ -1,10 +1,10 @@
 /**
  * HTML 엔티티를 브라우저 내장 DOM 파서로 디코딩한다.
  */
+const _decoder = document.createElement('textarea');
 function decodeHtmlEntities(str) {
-  const el = document.createElement('textarea');
-  el.innerHTML = str;
-  return el.value;
+  _decoder.innerHTML = str;
+  return _decoder.value;
 }
 
 /**

@@ -3,6 +3,29 @@ const { spawn, execFileSync } = require('node:child_process');
 
 const PORT = process.env.PORT || 3456;
 const CLI_TIMEOUT = 120_000;
+const MAX_CONCURRENT = 2;
+
+// === 동시 요청 제한 세마포어 ===
+
+let running = 0;
+const queue = [];
+
+function acquireSlot() {
+  if (running < MAX_CONCURRENT) {
+    running++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => queue.push(resolve));
+}
+
+function releaseSlot() {
+  if (queue.length > 0) {
+    const next = queue.shift();
+    next();
+  } else {
+    running--;
+  }
+}
 
 // === Claude CLI 호출 (비동기, shell injection 방지) ===
 
@@ -93,9 +116,16 @@ const server = http.createServer(async (req, res) => {
     try {
       const { systemPrompt, userText, model } = await readBody(req);
       const prompt = `${systemPrompt}\n\n${userText}`;
-      console.log(`[translate] model: ${model || 'default'}, prompt: ${prompt.length} chars`);
+      console.log(`[translate] model: ${model || 'default'}, prompt: ${prompt.length} chars (queue: ${queue.length}, running: ${running}/${MAX_CONCURRENT})`);
 
-      const result = await callClaude(prompt, model);
+      await acquireSlot();
+      let result;
+      try {
+        result = await callClaude(prompt, model);
+      } finally {
+        releaseSlot();
+      }
+
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
       console.log(`[translate] done in ${elapsed}s, response: ${result.length} chars`);
 
