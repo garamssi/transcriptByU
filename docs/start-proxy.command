@@ -3,7 +3,12 @@
 # 터미널 타이틀 설정
 echo -ne "\033]0;Claude Code Proxy Server\007"
 
-cd /Users/rami/00_Study/udemy_translation/extention
+# 스크립트 자신의 위치 기준으로 프로젝트 루트로 이동 (docs/ 의 상위)
+cd "$(dirname "$0")/.." || exit 1
+
+# nvm 로드 (Finder 더블클릭 시 PATH에 node가 없는 문제 방지)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 # 기존 프록시 서버 종료
 if lsof -ti:3456 > /dev/null 2>&1; then

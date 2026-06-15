@@ -110,58 +110,39 @@ export class TranslationService {
   }
 
   /**
-   * 프로바이더별 번역 전략 분기
+   * 프로바이더별 번역 전략 분기.
+   * 모든 프로바이더가 CHUNK_SIZE 단위로 청크를 나눠 전송한다.
+   * claude-code는 로컬 프록시가 요청을 직렬화하므로 청크 간 딜레이가 불필요하고,
+   * cloud(Gemini/Claude)는 rate limit 보호를 위해 청크 간 1초 딜레이를 둔다.
    * @private
    */
   async _translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model) {
-    if (provider === 'claude-code') {
-      return this._translateClaudeCode(uniqueTexts, systemPrompt, apiKey, model);
-    }
-    return this._translateCloud(uniqueTexts, systemPrompt, provider, apiKey, model);
+    const interChunkDelayMs = provider === 'claude-code' ? 0 : 1000;
+    return this._translateChunked(uniqueTexts, systemPrompt, provider, apiKey, model, interChunkDelayMs);
   }
 
   /**
-   * Claude Code 전략: 청크 없이 전체를 한 번에 전송, 실패분 1회 재시도
+   * CHUNK_SIZE 단위로 청크를 나눠 번역하고, 청크별 실패분을 1회 재시도한다.
+   * 청킹으로 단일 거대 요청에서 발생하는 응답 잘림·CLI 타임아웃과
+   * 그로 인한 대량 재시도(토큰 낭비)를 방지한다.
    * @private
    */
-  async _translateClaudeCode(uniqueTexts, systemPrompt, apiKey, model) {
-    const translationMap = {};
-    const maxTokens = Math.max(4096, uniqueTexts.length * 400);
-
-    const failed = await this._translateAndParse(uniqueTexts, systemPrompt, 'claude-code', apiKey, model, maxTokens, translationMap);
-
-    if (failed.length > 0) {
-      console.log(`[UdemyTranslator:claude-code] Retrying ${failed.length} failed texts`);
-      const retryMaxTokens = Math.max(4096, failed.length * 400);
-      const stillFailed = await this._translateAndParse(failed, systemPrompt, 'claude-code', apiKey, model, retryMaxTokens, translationMap);
-      if (stillFailed.length > 0) {
-        console.warn(`[UdemyTranslator:claude-code] ${stillFailed.length} texts failed after retry`);
-      }
-    }
-
-    return translationMap;
-  }
-
-  /**
-   * Cloud 전략 (Gemini/Claude): 대청크, 청크 간 1초 딜레이, 실패분 1회 재시도
-   * @private
-   */
-  async _translateCloud(uniqueTexts, systemPrompt, provider, apiKey, model) {
+  async _translateChunked(uniqueTexts, systemPrompt, provider, apiKey, model, interChunkDelayMs) {
     const translationMap = {};
 
     for (let start = 0; start < uniqueTexts.length; start += CHUNK_SIZE) {
       const chunk = uniqueTexts.slice(start, start + CHUNK_SIZE);
       const maxTokens = Math.max(4096, chunk.length * 400);
 
-      // 청크 간 1초 딜레이 (rate limit 보호)
-      if (start > 0) await new Promise(r => setTimeout(r, 1000));
+      // 청크 간 딜레이 (cloud rate limit 보호용, claude-code는 0)
+      if (start > 0 && interChunkDelayMs > 0) await new Promise(r => setTimeout(r, interChunkDelayMs));
 
       const failed = await this._translateAndParse(chunk, systemPrompt, provider, apiKey, model, maxTokens, translationMap);
 
       // 실패분 1회 재시도
       if (failed.length > 0) {
         console.log(`[UdemyTranslator:${provider}] Retrying ${failed.length} failed texts`);
-        await new Promise(r => setTimeout(r, 1000));
+        if (interChunkDelayMs > 0) await new Promise(r => setTimeout(r, interChunkDelayMs));
         const retryMaxTokens = Math.max(4096, failed.length * 400);
         const stillFailed = await this._translateAndParse(failed, systemPrompt, provider, apiKey, model, retryMaxTokens, translationMap);
         if (stillFailed.length > 0) {
