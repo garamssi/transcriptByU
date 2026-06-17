@@ -175,21 +175,26 @@ export class TranslationService {
       }
     }
 
-    // 중복 번역 감지: 다른 원본인데 같은 번역이면 의심
-    const translationToNum = new Map();
+    // 중복 번역 감지: 다른 원본인데 같은 번역이면 의심 (소형 모델 전용, claude-code는 스킵)
+    // claude-code는 고품질 모델이라 짧은 줄("Right.", "Okay." 등)이 정당하게 같은 번역으로
+    // 나오는 경우가 많은데, 이를 의심으로 떨어뜨리면 해당 줄이 캐시에 안 들어가
+    // 재방문마다 재번역되는 비결정적 누락이 발생한다. 따라서 claude-code에선 중복 거부를 하지 않는다.
     const suspectNums = new Set();
-    for (let j = 0; j < texts.length; j++) {
-      const translation = parsed.get(j + 1);
-      if (!translation) continue;
-      const prevNum = translationToNum.get(translation);
-      if (prevNum !== undefined && texts[prevNum] !== texts[j]) {
-        suspectNums.add(prevNum);
-        suspectNums.add(j);
+    if (provider !== 'claude-code') {
+      const translationToNum = new Map();
+      for (let j = 0; j < texts.length; j++) {
+        const translation = parsed.get(j + 1);
+        if (!translation) continue;
+        const prevNum = translationToNum.get(translation);
+        if (prevNum !== undefined && texts[prevNum] !== texts[j]) {
+          suspectNums.add(prevNum);
+          suspectNums.add(j);
+        }
+        translationToNum.set(translation, j);
       }
-      translationToNum.set(translation, j);
-    }
-    if (suspectNums.size > 0) {
-      console.warn(`[UdemyTranslator:${provider}] Duplicate translations detected at indices: ${[...suspectNums].join(',')}`);
+      if (suspectNums.size > 0) {
+        console.warn(`[UdemyTranslator:${provider}] Duplicate translations detected at indices: ${[...suspectNums].join(',')}`);
+      }
     }
 
     const failed = [];

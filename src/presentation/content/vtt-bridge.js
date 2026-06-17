@@ -45,13 +45,17 @@ export function initVttBridge() {
       }
 
       const results = response?.results || [];
+      let cachedCount = 0;
+      let freshCount = 0;
       for (let i = 0; i < uniqueTexts.length; i++) {
         if (results[i]?.translation) {
           vttTranslationStore.set(uniqueTexts[i], results[i].translation);
+          if (results[i].cached) cachedCount++;
+          else freshCount++;
         }
       }
 
-      console.log(`[UdemyTranslator:VTT] ${vttTranslationStore.size}/${uniqueTexts.length} translations stored`);
+      console.log(`[UdemyTranslator:VTT] ${vttTranslationStore.size}/${uniqueTexts.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
       document.dispatchEvent(new Event('vtt-translations-ready'));
     } catch (err) {
       console.error(`[UdemyTranslator:VTT] error: ${err.message}`);
