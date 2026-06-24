@@ -1,4 +1,4 @@
-import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS } from '../../domain/constants.js';
+import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS, migrateModel } from '../../domain/constants.js';
 import { checkClaudeCodeConnection } from '../../infrastructure/api/claude-code-client.js';
 
 /**
@@ -55,6 +55,15 @@ export async function initSettingsController($, updatePreview) {
   if (stored[STORAGE_KEYS.API_KEY] && !stored[STORAGE_KEYS.CLAUDE_API_KEY]) {
     stored[STORAGE_KEYS.CLAUDE_API_KEY] = stored[STORAGE_KEYS.API_KEY];
     await chrome.storage.local.set({ [STORAGE_KEYS.CLAUDE_API_KEY]: stored[STORAGE_KEYS.API_KEY] });
+  }
+
+  // 하위 호환: 구 모델 ID 마이그레이션 (예: Opus 4.6/4.7 → 4.8)
+  for (const key of [STORAGE_KEYS.CLAUDE_CODE_MODEL, STORAGE_KEYS.CLAUDE_MODEL, STORAGE_KEYS.MODEL]) {
+    const migrated = migrateModel(stored[key]);
+    if (stored[key] && migrated !== stored[key]) {
+      stored[key] = migrated;
+      await chrome.storage.local.set({ [key]: migrated });
+    }
   }
 
   currentProvider = stored[STORAGE_KEYS.PROVIDER] || 'claude-code';

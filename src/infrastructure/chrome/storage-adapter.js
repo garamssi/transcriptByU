@@ -3,6 +3,8 @@
  * Provider 설정을 로드하는 유틸리티
  */
 
+import { migrateModel } from '../../domain/constants.js';
+
 /**
  * Provider 설정을 로드한다.
  * @returns {Promise<{ provider: string, apiKey: string, model: string }>}
@@ -29,5 +31,5 @@ export async function getProviderConfig() {
     model = stored.claudeModel || stored.model || 'claude-haiku-4-5-20251001';
   }
 
-  return { provider, apiKey, model };
+  return { provider, apiKey, model: migrateModel(model) };
 }

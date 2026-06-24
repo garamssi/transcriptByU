@@ -3,7 +3,7 @@ const { spawn, execFileSync } = require('node:child_process');
 
 const PORT = process.env.PORT || 3456;
 const CLI_TIMEOUT = 120_000;
-const MAX_CONCURRENT = 2;
+const MAX_CONCURRENT = 3;
 
 // === 동시 요청 제한 세마포어 ===
 

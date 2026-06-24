@@ -130,16 +130,17 @@ export class TranslationService {
   async _translateChunked(uniqueTexts, systemPrompt, provider, apiKey, model, interChunkDelayMs) {
     const translationMap = {};
 
+    // 청크 분할
+    const chunks = [];
     for (let start = 0; start < uniqueTexts.length; start += CHUNK_SIZE) {
-      const chunk = uniqueTexts.slice(start, start + CHUNK_SIZE);
+      chunks.push(uniqueTexts.slice(start, start + CHUNK_SIZE));
+    }
+
+    // 청크 1개 번역 + 실패분 1회 재시도. translationMap은 원문 텍스트를 키로
+    // 쓰고 청크끼리 텍스트가 겹치지 않으므로, 병렬 실행해도 키 충돌이 없다.
+    const translateChunk = async (chunk) => {
       const maxTokens = Math.max(4096, chunk.length * 400);
-
-      // 청크 간 딜레이 (cloud rate limit 보호용, claude-code는 0)
-      if (start > 0 && interChunkDelayMs > 0) await new Promise(r => setTimeout(r, interChunkDelayMs));
-
       const failed = await this._translateAndParse(chunk, systemPrompt, provider, apiKey, model, maxTokens, translationMap);
-
-      // 실패분 1회 재시도
       if (failed.length > 0) {
         console.log(`[UdemyTranslator:${provider}] Retrying ${failed.length} failed texts`);
         if (interChunkDelayMs > 0) await new Promise(r => setTimeout(r, interChunkDelayMs));
@@ -148,6 +149,17 @@ export class TranslationService {
         if (stillFailed.length > 0) {
           console.warn(`[UdemyTranslator:${provider}] ${stillFailed.length} texts failed after retry`);
         }
+      }
+    };
+
+    if (interChunkDelayMs === 0) {
+      // claude-code: 모든 청크를 병렬 전송 (로컬 프록시가 MAX_CONCURRENT로 큐잉)
+      await Promise.all(chunks.map(translateChunk));
+    } else {
+      // cloud(Gemini/Claude): rate limit 보호를 위해 순차 + 청크 간 딜레이
+      for (let i = 0; i < chunks.length; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, interChunkDelayMs));
+        await translateChunk(chunks[i]);
       }
     }
 

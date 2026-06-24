@@ -25,7 +25,7 @@ export const L2_PREFIX = 'lec_';
 export const L1_MAX_SIZE = 50;
 
 // === Translation ===
-export const CHUNK_SIZE = 40;
+export const CHUNK_SIZE = 60;
 export const DEFAULT_TARGET_LANG = '한국어';
 
 // === DOM Selectors (Udemy) ===
@@ -70,9 +70,24 @@ export const MODELS = {
   ],
   'claude-code': [
     { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6 (빠름)' },
-    { value: 'claude-opus-4-6', label: 'Opus 4.6 (고품질)' },
+    { value: 'claude-opus-4-8', label: 'Opus 4.8 (고품질)' },
   ],
 };
+
+// === Retired Model Migrations (구 모델 ID → 현행 모델 ID) ===
+export const MODEL_MIGRATIONS = {
+  'claude-opus-4-6': 'claude-opus-4-8',
+  'claude-opus-4-7': 'claude-opus-4-8',
+};
+
+/**
+ * 저장된 모델 ID가 구버전이면 현행 ID로 치환한다.
+ * @param {string|undefined} value
+ * @returns {string|undefined}
+ */
+export function migrateModel(value) {
+  return MODEL_MIGRATIONS[value] || value;
+}
 
 // === Style Keys Set (for change detection) ===
 export const STYLE_CHANGE_KEYS = new Set([

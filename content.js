@@ -519,7 +519,10 @@
   }
 
   // src/presentation/content/navigation-handler.js
-  function onNavigate() {
+  var lastNavUrl = location.href;
+  function onNavigate(source) {
+    console.warn(`[UdemyTranslator:NAV] onNavigate fired (source=${source}) prevUrl=${lastNavUrl} nowUrl=${location.href} sameUrl=${lastNavUrl === location.href}`);
+    lastNavUrl = location.href;
     clearVttStore();
     cleanup2();
     cleanup();
@@ -530,19 +533,19 @@
   }
   function setupNavigationHandler() {
     if (typeof navigation !== "undefined") {
-      navigation.addEventListener("navigate", onNavigate);
+      navigation.addEventListener("navigate", () => onNavigate("navigate"));
     } else {
-      window.addEventListener("popstate", onNavigate);
-      window.addEventListener("hashchange", onNavigate);
+      window.addEventListener("popstate", () => onNavigate("popstate"));
+      window.addEventListener("hashchange", () => onNavigate("hashchange"));
       const origPushState = history.pushState.bind(history);
       const origReplaceState = history.replaceState.bind(history);
       history.pushState = function(...args) {
         origPushState(...args);
-        onNavigate();
+        onNavigate("pushState");
       };
       history.replaceState = function(...args) {
         origReplaceState(...args);
-        onNavigate();
+        onNavigate("replaceState");
       };
     }
   }
