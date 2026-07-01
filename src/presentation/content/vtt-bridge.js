@@ -31,32 +31,7 @@ export function initVttBridge() {
       const uniqueTexts = [...new Set(cues.map(c => c.text))];
       console.log(`[UdemyTranslator:VTT] ${cues.length} cues, ${uniqueTexts.length} unique texts`);
 
-      const ctx = getLectureContext();
-      const response = await chrome.runtime.sendMessage({
-        type: 'TRANSLATE_BATCH',
-        texts: uniqueTexts,
-        course: ctx.course,
-        lecture: ctx.lecture,
-        section: ctx.section,
-      });
-
-      if (response?.error) {
-        console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
-        return;
-      }
-
-      const results = response?.results || [];
-      let cachedCount = 0;
-      let freshCount = 0;
-      for (let i = 0; i < uniqueTexts.length; i++) {
-        if (results[i]?.translation) {
-          vttTranslationStore.set(uniqueTexts[i], results[i].translation);
-          if (results[i].cached) cachedCount++;
-          else freshCount++;
-        }
-      }
-
-      console.log(`[UdemyTranslator:VTT] ${vttTranslationStore.size}/${uniqueTexts.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
+      await requestTranslations(uniqueTexts);
       document.dispatchEvent(new Event('vtt-translations-ready'));
     } catch (err) {
       console.error(`[UdemyTranslator:VTT] error: ${err.message}`);
@@ -67,12 +42,60 @@ export function initVttBridge() {
 }
 
 /**
+ * 주어진 원본 텍스트들을 배치 번역 요청하여 메모리 저장소에 저장한다.
+ * VTT 최초 캡처와 수동 재번역이 공통으로 사용한다. 캐시가 비어 있으면
+ * background 의 TranslationService 가 API 를 호출해 새 번역을 만들어 반환한다.
+ * @param {string[]} texts - 원본 텍스트 목록
+ * @returns {Promise<number>} 저장소에 채워진 번역 수
+ */
+export async function requestTranslations(texts) {
+  const uniqueTexts = [...new Set(texts)].filter(Boolean);
+  if (uniqueTexts.length === 0) return 0;
+
+  const ctx = getLectureContext();
+  const response = await chrome.runtime.sendMessage({
+    type: 'TRANSLATE_BATCH',
+    texts: uniqueTexts,
+    course: ctx.course,
+    lecture: ctx.lecture,
+    section: ctx.section,
+  });
+
+  if (response?.error) {
+    console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
+    return 0;
+  }
+
+  const results = response?.results || [];
+  let cachedCount = 0;
+  let freshCount = 0;
+  for (let i = 0; i < uniqueTexts.length; i++) {
+    if (results[i]?.translation) {
+      vttTranslationStore.set(uniqueTexts[i], results[i].translation);
+      if (results[i].cached) cachedCount++;
+      else freshCount++;
+    }
+  }
+
+  console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${uniqueTexts.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
+  return freshCount + cachedCount;
+}
+
+/**
  * VTT 번역 저장소에서 번역을 조회한다.
  * @param {string} text - 원본 텍스트
  * @returns {string|null}
  */
 export function getVttTranslation(text) {
   return vttTranslationStore.get(text) || null;
+}
+
+/**
+ * 지정한 원본 텍스트들의 메모리 번역을 폐기한다 (재번역 시 오래된 번역 제거).
+ * @param {string[]} texts - 원본 텍스트 목록
+ */
+export function forgetVttTranslations(texts) {
+  for (const text of texts) vttTranslationStore.delete(text);
 }
 
 /**

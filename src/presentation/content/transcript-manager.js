@@ -1,7 +1,7 @@
 import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR, STORAGE_KEYS } from '../../domain/constants.js';
 import { currentStyle } from './style-manager.js';
 import { replaceCaptionText, updateCaptionCache, clearCaptionCache } from './caption-manager.js';
-import { getVttTranslation } from './vtt-bridge.js';
+import { getVttTranslation, requestTranslations, forgetVttTranslations } from './vtt-bridge.js';
 
 let observer = null;
 let panelFinderObserver = null;
@@ -260,6 +260,10 @@ export async function retranslateAll() {
   const lang = stored[STORAGE_KEYS.TARGET_LANG] || '한국어';
   const ctx = getLectureContext();
 
+  // 재번역 대상 원본 텍스트(영문)를 DOM 원복 전에 확보한다.
+  const texts = cueItems.map(({ text }) => text);
+
+  // 1) 영속 캐시(L1+L2) 삭제 → 다음 TRANSLATE_BATCH 가 API 를 새로 호출하도록 한다.
   await chrome.runtime.sendMessage({
     type: 'CLEAR_LECTURE_CACHE',
     lang,
@@ -267,6 +271,11 @@ export async function retranslateAll() {
     lecture: ctx.lecture,
     section: ctx.section
   });
+
+  // 2) 메모리 VTT 저장소의 기존 번역 폐기 + DOM 원복.
+  //    이 단계 없이는 applyVttTranslations 가 오래된 메모리 번역을 다시 붙여
+  //    캐시만 지워지고 화면은 그대로인 문제가 발생한다.
+  forgetVttTranslations(texts);
 
   pauseObserver();
   for (const { textSpan } of cueItems) {
@@ -278,8 +287,11 @@ export async function retranslateAll() {
     const parent = textSpan.closest('p') || textSpan.parentElement;
     parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach(el => el.remove());
   }
+  clearCaptionCache();
   resumeObserver();
 
+  // 3) 캐시가 비었으므로 새 번역을 API 로 재요청한 뒤 DOM 에 적용한다.
+  await requestTranslations(texts);
   applyVttTranslations(panel);
 
   const translated = collectCues(panel).filter(({ textSpan }) => textSpan.dataset.original);

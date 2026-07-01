@@ -97,7 +97,9 @@
     }
     const bgCaption = currentStyle.bgEnabled ? `background-color: ${hexToRgba(currentStyle.bgColor, currentStyle.bgOpacity)} !important; padding: 4px 10px !important; border-radius: 4px !important;` : "";
     styleEl.textContent = `
-    /* \uBC88\uC5ED\uB41C cue-text \uC2A4\uD0C0\uC77C (\uD2B8\uB79C\uC2A4\uD06C\uB9BD\uD2B8 \uD328\uB110) \u2014 \uD770 \uBC30\uACBD\uC774\uBBC0\uB85C \uAC80\uC740 \uAE00\uC528 */
+    /* \uBC88\uC5ED\uB41C cue-text \uC2A4\uD0C0\uC77C (\uD2B8\uB79C\uC2A4\uD06C\uB9BD\uD2B8 \uD328\uB110).
+       \uAE00\uC790 \uD06C\uAE30\uB294 \uC720\uB370\uBBF8 \uAE30\uBCF8\uAC12 \uC720\uC9C0 (\uC2AC\uB77C\uC774\uB354\uB294 \uBE44\uB514\uC624 \uCEA1\uC158\uC5D0\uB9CC \uC801\uC6A9).
+       \uAE00\uC790\uC0C9\uC740 \uAE30\uBCF8\uC801\uC73C\uB85C \uC720\uB370\uBBF8 \uAE30\uBCF8\uC0C9 \uC0AC\uC6A9, \uC0AC\uC6A9\uC790\uAC00 \uCF30\uC744 \uB54C\uB9CC \uC624\uBC84\uB77C\uC774\uB4DC */
     ${SELECTORS.cueText}[data-original] {
       ${currentStyle.panelColorEnabled ? `color: ${currentStyle.panelColor} !important;` : ""}
     }
@@ -186,29 +188,7 @@
         }
         const uniqueTexts = [...new Set(cues.map((c) => c.text))];
         console.log(`[UdemyTranslator:VTT] ${cues.length} cues, ${uniqueTexts.length} unique texts`);
-        const ctx = getLectureContext();
-        const response = await chrome.runtime.sendMessage({
-          type: "TRANSLATE_BATCH",
-          texts: uniqueTexts,
-          course: ctx.course,
-          lecture: ctx.lecture,
-          section: ctx.section
-        });
-        if (response?.error) {
-          console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
-          return;
-        }
-        const results = response?.results || [];
-        let cachedCount = 0;
-        let freshCount = 0;
-        for (let i = 0; i < uniqueTexts.length; i++) {
-          if (results[i]?.translation) {
-            vttTranslationStore.set(uniqueTexts[i], results[i].translation);
-            if (results[i].cached) cachedCount++;
-            else freshCount++;
-          }
-        }
-        console.log(`[UdemyTranslator:VTT] ${vttTranslationStore.size}/${uniqueTexts.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
+        await requestTranslations(uniqueTexts);
         document.dispatchEvent(new Event("vtt-translations-ready"));
       } catch (err) {
         console.error(`[UdemyTranslator:VTT] error: ${err.message}`);
@@ -217,8 +197,39 @@
       }
     });
   }
+  async function requestTranslations(texts) {
+    const uniqueTexts = [...new Set(texts)].filter(Boolean);
+    if (uniqueTexts.length === 0) return 0;
+    const ctx = getLectureContext();
+    const response = await chrome.runtime.sendMessage({
+      type: "TRANSLATE_BATCH",
+      texts: uniqueTexts,
+      course: ctx.course,
+      lecture: ctx.lecture,
+      section: ctx.section
+    });
+    if (response?.error) {
+      console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
+      return 0;
+    }
+    const results = response?.results || [];
+    let cachedCount = 0;
+    let freshCount = 0;
+    for (let i = 0; i < uniqueTexts.length; i++) {
+      if (results[i]?.translation) {
+        vttTranslationStore.set(uniqueTexts[i], results[i].translation);
+        if (results[i].cached) cachedCount++;
+        else freshCount++;
+      }
+    }
+    console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${uniqueTexts.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
+    return freshCount + cachedCount;
+  }
   function getVttTranslation(text) {
     return vttTranslationStore.get(text) || null;
+  }
+  function forgetVttTranslations(texts) {
+    for (const text of texts) vttTranslationStore.delete(text);
   }
   function clearVttStore() {
     vttTranslationStore.clear();
@@ -501,6 +512,7 @@
     const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG]);
     const lang = stored[STORAGE_KEYS.TARGET_LANG] || "\uD55C\uAD6D\uC5B4";
     const ctx = getLectureContext();
+    const texts = cueItems.map(({ text }) => text);
     await chrome.runtime.sendMessage({
       type: "CLEAR_LECTURE_CACHE",
       lang,
@@ -508,6 +520,7 @@
       lecture: ctx.lecture,
       section: ctx.section
     });
+    forgetVttTranslations(texts);
     pauseObserver();
     for (const { textSpan } of cueItems) {
       if (textSpan.dataset.original) {
@@ -518,7 +531,9 @@
       const parent = textSpan.closest("p") || textSpan.parentElement;
       parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach((el) => el.remove());
     }
+    clearCaptionCache();
     resumeObserver();
+    await requestTranslations(texts);
     applyVttTranslations(panel);
     const translated = collectCues(panel).filter(({ textSpan }) => textSpan.dataset.original);
     return { count: translated.length };
