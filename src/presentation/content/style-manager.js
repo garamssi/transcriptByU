@@ -66,9 +66,10 @@ export function updateDynamicStyles() {
       opacity: 1 !important;
       ${bgCaption}
     }
-    /* 원본 텍스트 (both 모드에서 보조 표시) */
+    /* 원본 텍스트 (트랜스크립트 패널 both 모드에서 번역 아래 보조 표시).
+       패널 번역 텍스트(유데미 기본 ~16px)의 약 87% 크기로 보조 가독성 확보 */
     .${ORIGINAL_CLASS} {
-      font-size: 11px !important;
+      font-size: 14px !important;
       color: #999 !important;
       display: block;
       margin-top: 2px;

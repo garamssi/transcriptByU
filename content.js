@@ -110,9 +110,10 @@
       opacity: 1 !important;
       ${bgCaption}
     }
-    /* \uC6D0\uBCF8 \uD14D\uC2A4\uD2B8 (both \uBAA8\uB4DC\uC5D0\uC11C \uBCF4\uC870 \uD45C\uC2DC) */
+    /* \uC6D0\uBCF8 \uD14D\uC2A4\uD2B8 (\uD2B8\uB79C\uC2A4\uD06C\uB9BD\uD2B8 \uD328\uB110 both \uBAA8\uB4DC\uC5D0\uC11C \uBC88\uC5ED \uC544\uB798 \uBCF4\uC870 \uD45C\uC2DC).
+       \uD328\uB110 \uBC88\uC5ED \uD14D\uC2A4\uD2B8(\uC720\uB370\uBBF8 \uAE30\uBCF8 ~16px)\uC758 \uC57D 87% \uD06C\uAE30\uB85C \uBCF4\uC870 \uAC00\uB3C5\uC131 \uD655\uBCF4 */
     .${ORIGINAL_CLASS} {
-      font-size: 11px !important;
+      font-size: 14px !important;
       color: #999 !important;
       display: block;
       margin-top: 2px;
