@@ -20,7 +20,10 @@ function resumeObserver() {
 
 // === 강의 컨텍스트 추출 ===
 export function getLectureContext() {
-  const result = { lecture: '', section: '' };
+  const result = { course: '', lecture: '', section: '' };
+  // 코스 식별자: URL 슬러그 (/course/<slug>/learn/...) — 항상 존재, 코스마다 고유
+  const courseMatch = location.pathname.match(/\/course\/([^/]+)/);
+  if (courseMatch) result.course = courseMatch[1];
   const lectureEl = document.querySelector(LECTURE_SELECTORS.currentItem);
   if (lectureEl) result.lecture = lectureEl.textContent.trim();
 
@@ -260,6 +263,7 @@ export async function retranslateAll() {
   await chrome.runtime.sendMessage({
     type: 'CLEAR_LECTURE_CACHE',
     lang,
+    course: ctx.course,
     lecture: ctx.lecture,
     section: ctx.section
   });

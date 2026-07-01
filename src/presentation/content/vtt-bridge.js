@@ -35,6 +35,7 @@ export function initVttBridge() {
       const response = await chrome.runtime.sendMessage({
         type: 'TRANSLATE_BATCH',
         texts: uniqueTexts,
+        course: ctx.course,
         lecture: ctx.lecture,
         section: ctx.section,
       });

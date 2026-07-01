@@ -46,12 +46,20 @@ export class CacheService {
       if (langSep === -1) continue;
       const lang = raw.slice(0, langSep);
       const rest = raw.slice(langSep + 2);
-      const lecSep = rest.indexOf('||');
-      const section = lecSep !== -1 ? rest.slice(0, lecSep) : '';
-      const lecture = lecSep !== -1 ? rest.slice(lecSep + 2) : rest;
+      // 형식: course||section||lecture (구형 section||lecture 도 허용)
+      const parts = rest.split('||');
+      let course = '', section = '', lecture = '';
+      if (parts.length >= 3) {
+        course = parts[0];
+        section = parts[1];
+        lecture = parts.slice(2).join('||');
+      } else {
+        section = parts[0] || '';
+        lecture = parts.slice(1).join('||');
+      }
       const count = (typeof value === 'object' && value !== null) ? Object.keys(value).length : 0;
 
-      items.push({ key, lang, section, lecture, count });
+      items.push({ key, lang, course, section, lecture, count });
     }
     return { items };
   }

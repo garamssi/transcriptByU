@@ -20,6 +20,8 @@
     STYLE_BG_COLOR: "styleBgColor",
     STYLE_BG_ENABLED: "styleBgEnabled",
     STYLE_BG_OPACITY: "styleBgOpacity",
+    STYLE_PANEL_COLOR: "stylePanelColor",
+    STYLE_PANEL_COLOR_ENABLED: "stylePanelColorEnabled",
     STYLE_EXPANDED: "styleExpanded"
   };
   var SELECTORS = {
@@ -41,6 +43,8 @@
     STORAGE_KEYS.STYLE_BG_COLOR,
     STORAGE_KEYS.STYLE_BG_ENABLED,
     STORAGE_KEYS.STYLE_BG_OPACITY,
+    STORAGE_KEYS.STYLE_PANEL_COLOR,
+    STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED,
     STORAGE_KEYS.DISPLAY_MODE,
     STORAGE_KEYS.ENABLED
   ]);
@@ -60,6 +64,8 @@
     bgColor: "#1e293b",
     bgOpacity: 80,
     bgEnabled: true,
+    panelColor: "#1a1a1a",
+    panelColorEnabled: false,
     displayMode: "translation"
   };
   async function loadStyle() {
@@ -69,13 +75,17 @@
       STORAGE_KEYS.STYLE_BG_COLOR,
       STORAGE_KEYS.STYLE_BG_ENABLED,
       STORAGE_KEYS.STYLE_BG_OPACITY,
-      STORAGE_KEYS.DISPLAY_MODE
+      STORAGE_KEYS.DISPLAY_MODE,
+      STORAGE_KEYS.STYLE_PANEL_COLOR,
+      STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED
     ]);
     currentStyle.fontSize = stored[STORAGE_KEYS.STYLE_FONT_SIZE] ?? 14;
     currentStyle.fontColor = stored[STORAGE_KEYS.STYLE_FONT_COLOR] ?? "#ffffff";
     currentStyle.bgColor = stored[STORAGE_KEYS.STYLE_BG_COLOR] ?? "#1e293b";
     currentStyle.bgOpacity = stored[STORAGE_KEYS.STYLE_BG_OPACITY] ?? 80;
     currentStyle.bgEnabled = stored[STORAGE_KEYS.STYLE_BG_ENABLED] ?? true;
+    currentStyle.panelColor = stored[STORAGE_KEYS.STYLE_PANEL_COLOR] ?? "#1a1a1a";
+    currentStyle.panelColorEnabled = stored[STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED] ?? false;
     currentStyle.displayMode = stored[STORAGE_KEYS.DISPLAY_MODE] ?? "translation";
   }
   function updateDynamicStyles() {
@@ -89,8 +99,7 @@
     styleEl.textContent = `
     /* \uBC88\uC5ED\uB41C cue-text \uC2A4\uD0C0\uC77C (\uD2B8\uB79C\uC2A4\uD06C\uB9BD\uD2B8 \uD328\uB110) \u2014 \uD770 \uBC30\uACBD\uC774\uBBC0\uB85C \uAC80\uC740 \uAE00\uC528 */
     ${SELECTORS.cueText}[data-original] {
-      font-size: ${currentStyle.fontSize}px !important;
-      color: #1a1a1a !important;
+      ${currentStyle.panelColorEnabled ? `color: ${currentStyle.panelColor} !important;` : ""}
     }
     /* \uBE44\uB514\uC624 \uCEA1\uC158 \uC2A4\uD0C0\uC77C \u2014 \uC5B4\uB450\uC6B4 \uBC30\uACBD + \uBC1D\uC740 \uAE00\uC528 */
     ${CAPTION_SELECTOR} {
@@ -181,6 +190,7 @@
         const response = await chrome.runtime.sendMessage({
           type: "TRANSLATE_BATCH",
           texts: uniqueTexts,
+          course: ctx.course,
           lecture: ctx.lecture,
           section: ctx.section
         });
@@ -307,7 +317,9 @@
     if (observer && currentPanel) observer.observe(currentPanel, PANEL_OBSERVE_OPTS);
   }
   function getLectureContext() {
-    const result = { lecture: "", section: "" };
+    const result = { course: "", lecture: "", section: "" };
+    const courseMatch = location.pathname.match(/\/course\/([^/]+)/);
+    if (courseMatch) result.course = courseMatch[1];
     const lectureEl = document.querySelector(LECTURE_SELECTORS.currentItem);
     if (lectureEl) result.lecture = lectureEl.textContent.trim();
     const currentLi = document.querySelector('li[aria-current="true"]');
@@ -492,6 +504,7 @@
     await chrome.runtime.sendMessage({
       type: "CLEAR_LECTURE_CACHE",
       lang,
+      course: ctx.course,
       lecture: ctx.lecture,
       section: ctx.section
     });
@@ -519,10 +532,7 @@
   }
 
   // src/presentation/content/navigation-handler.js
-  var lastNavUrl = location.href;
-  function onNavigate(source) {
-    console.warn(`[UdemyTranslator:NAV] onNavigate fired (source=${source}) prevUrl=${lastNavUrl} nowUrl=${location.href} sameUrl=${lastNavUrl === location.href}`);
-    lastNavUrl = location.href;
+  function onNavigate() {
     clearVttStore();
     cleanup2();
     cleanup();
@@ -533,19 +543,19 @@
   }
   function setupNavigationHandler() {
     if (typeof navigation !== "undefined") {
-      navigation.addEventListener("navigate", () => onNavigate("navigate"));
+      navigation.addEventListener("navigate", onNavigate);
     } else {
-      window.addEventListener("popstate", () => onNavigate("popstate"));
-      window.addEventListener("hashchange", () => onNavigate("hashchange"));
+      window.addEventListener("popstate", onNavigate);
+      window.addEventListener("hashchange", onNavigate);
       const origPushState = history.pushState.bind(history);
       const origReplaceState = history.replaceState.bind(history);
       history.pushState = function(...args) {
         origPushState(...args);
-        onNavigate("pushState");
+        onNavigate();
       };
       history.replaceState = function(...args) {
         origReplaceState(...args);
-        onNavigate("replaceState");
+        onNavigate();
       };
     }
   }

@@ -1,4 +1,4 @@
-import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS, migrateModel } from '../../domain/constants.js';
+import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS } from '../../domain/constants.js';
 import { checkClaudeCodeConnection } from '../../infrastructure/api/claude-code-client.js';
 
 /**
@@ -34,6 +34,9 @@ export async function initSettingsController($, updatePreview) {
   const bgOpacitySlider = $('styleBgOpacity');
   const bgOpacityValue = $('bgOpacityValue');
   const bgOpacityGroup = $('bgOpacityGroup');
+  const panelColorPicker = $('stylePanelColor');
+  const panelColorHex = $('panelColorHex');
+  const panelColorEnabledCheck = $('panelColorEnabled');
 
   // 접기/펼치기
   const styleToggle = $('styleToggle');
@@ -49,21 +52,13 @@ export async function initSettingsController($, updatePreview) {
     STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.DISPLAY_MODE,
     STORAGE_KEYS.STYLE_FONT_SIZE, STORAGE_KEYS.STYLE_FONT_COLOR, STORAGE_KEYS.STYLE_BG_COLOR,
     STORAGE_KEYS.STYLE_BG_ENABLED, STORAGE_KEYS.STYLE_BG_OPACITY, STORAGE_KEYS.STYLE_EXPANDED,
+    STORAGE_KEYS.STYLE_PANEL_COLOR, STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED,
   ]);
 
   // 하위 호환: 기존 apiKey → claudeApiKey 마이그레이션
   if (stored[STORAGE_KEYS.API_KEY] && !stored[STORAGE_KEYS.CLAUDE_API_KEY]) {
     stored[STORAGE_KEYS.CLAUDE_API_KEY] = stored[STORAGE_KEYS.API_KEY];
     await chrome.storage.local.set({ [STORAGE_KEYS.CLAUDE_API_KEY]: stored[STORAGE_KEYS.API_KEY] });
-  }
-
-  // 하위 호환: 구 모델 ID 마이그레이션 (예: Opus 4.6/4.7 → 4.8)
-  for (const key of [STORAGE_KEYS.CLAUDE_CODE_MODEL, STORAGE_KEYS.CLAUDE_MODEL, STORAGE_KEYS.MODEL]) {
-    const migrated = migrateModel(stored[key]);
-    if (stored[key] && migrated !== stored[key]) {
-      stored[key] = migrated;
-      await chrome.storage.local.set({ [key]: migrated });
-    }
   }
 
   currentProvider = stored[STORAGE_KEYS.PROVIDER] || 'claude-code';
@@ -85,6 +80,8 @@ export async function initSettingsController($, updatePreview) {
   const bgColor = stored[STORAGE_KEYS.STYLE_BG_COLOR] ?? STYLE_DEFAULTS.bgColor;
   const bgEnabled = stored[STORAGE_KEYS.STYLE_BG_ENABLED] ?? STYLE_DEFAULTS.bgEnabled;
   const bgOpacity = stored[STORAGE_KEYS.STYLE_BG_OPACITY] ?? STYLE_DEFAULTS.bgOpacity;
+  const panelColor = stored[STORAGE_KEYS.STYLE_PANEL_COLOR] ?? STYLE_DEFAULTS.panelColor;
+  const panelColorEnabled = stored[STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED] ?? STYLE_DEFAULTS.panelColorEnabled;
 
   fontSizeSlider.value = fontSize;
   fontSizeValue.textContent = `${fontSize}px`;
@@ -94,6 +91,9 @@ export async function initSettingsController($, updatePreview) {
   bgEnabledCheck.checked = bgEnabled;
   bgOpacitySlider.value = bgOpacity;
   bgOpacityValue.textContent = `${bgOpacity}%`;
+  panelColorPicker.value = panelColor;
+  panelColorEnabledCheck.checked = panelColorEnabled;
+  updatePanelColorHex();
   updateBgVisibility();
   updatePreview();
 
@@ -271,6 +271,16 @@ export async function initSettingsController($, updatePreview) {
     updatePreview();
   });
 
+  panelColorPicker.addEventListener('input', async () => {
+    await chrome.storage.local.set({ [STORAGE_KEYS.STYLE_PANEL_COLOR]: panelColorPicker.value });
+    updatePanelColorHex();
+  });
+
+  panelColorEnabledCheck.addEventListener('change', async () => {
+    await chrome.storage.local.set({ [STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED]: panelColorEnabledCheck.checked });
+    updatePanelColorHex();
+  });
+
   // === 현재 자막 재번역 ===
   const retranslateBtn = $('retranslateBtn');
   const retranslateText = $('retranslateText');
@@ -306,6 +316,12 @@ export async function initSettingsController($, updatePreview) {
     const on = bgEnabledCheck.checked;
     bgColorHex.textContent = on ? bgColorPicker.value : '없음';
     bgOpacityGroup.style.display = on ? '' : 'none';
+  }
+
+  function updatePanelColorHex() {
+    panelColorHex.textContent = panelColorEnabledCheck.checked
+      ? panelColorPicker.value
+      : '유데미 기본';
   }
 
   async function updateStatus() {

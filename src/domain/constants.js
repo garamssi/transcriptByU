@@ -17,6 +17,8 @@ export const STORAGE_KEYS = {
   STYLE_BG_COLOR: 'styleBgColor',
   STYLE_BG_ENABLED: 'styleBgEnabled',
   STYLE_BG_OPACITY: 'styleBgOpacity',
+  STYLE_PANEL_COLOR: 'stylePanelColor',
+  STYLE_PANEL_COLOR_ENABLED: 'stylePanelColorEnabled',
   STYLE_EXPANDED: 'styleExpanded',
 };
 
@@ -54,6 +56,8 @@ export const STYLE_DEFAULTS = {
   bgColor: '#1e293b',
   bgOpacity: 80,
   bgEnabled: true,
+  panelColor: '#1a1a1a',
+  panelColorEnabled: false,
   displayMode: 'translation',
 };
 
@@ -61,33 +65,19 @@ export const STYLE_DEFAULTS = {
 export const MODELS = {
   claude: [
     { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 (빠름/저렴)' },
-    { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6 (고품질)' },
+    { value: 'claude-sonnet-5', label: 'Sonnet 5 (균형)' },
+    { value: 'claude-opus-4-8', label: 'Opus 4.8 (고품질)' },
   ],
   gemini: [
-    { value: 'gemini-2.5-flash', label: 'Flash 2.5 (빠름/저렴)' },
-    { value: 'gemini-2.0-flash', label: 'Flash 2.0 (빠름/저렴)' },
+    { value: 'gemini-3.1-flash-lite', label: 'Flash-Lite 3.1 (빠름/저렴)' },
+    { value: 'gemini-3.5-flash', label: 'Flash 3.5 (권장)' },
     { value: 'gemini-2.5-pro', label: '2.5 Pro (고품질)' },
   ],
   'claude-code': [
-    { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6 (빠름)' },
+    { value: 'claude-sonnet-5', label: 'Sonnet 5 (빠름)' },
     { value: 'claude-opus-4-8', label: 'Opus 4.8 (고품질)' },
   ],
 };
-
-// === Retired Model Migrations (구 모델 ID → 현행 모델 ID) ===
-export const MODEL_MIGRATIONS = {
-  'claude-opus-4-6': 'claude-opus-4-8',
-  'claude-opus-4-7': 'claude-opus-4-8',
-};
-
-/**
- * 저장된 모델 ID가 구버전이면 현행 ID로 치환한다.
- * @param {string|undefined} value
- * @returns {string|undefined}
- */
-export function migrateModel(value) {
-  return MODEL_MIGRATIONS[value] || value;
-}
 
 // === Style Keys Set (for change detection) ===
 export const STYLE_CHANGE_KEYS = new Set([
@@ -96,6 +86,8 @@ export const STYLE_CHANGE_KEYS = new Set([
   STORAGE_KEYS.STYLE_BG_COLOR,
   STORAGE_KEYS.STYLE_BG_ENABLED,
   STORAGE_KEYS.STYLE_BG_OPACITY,
+  STORAGE_KEYS.STYLE_PANEL_COLOR,
+  STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED,
   STORAGE_KEYS.DISPLAY_MODE,
   STORAGE_KEYS.ENABLED,
 ]);

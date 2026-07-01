@@ -12,6 +12,8 @@ export const currentStyle = {
   bgColor: '#1e293b',
   bgOpacity: 80,
   bgEnabled: true,
+  panelColor: '#1a1a1a',
+  panelColorEnabled: false,
   displayMode: 'translation'
 };
 
@@ -23,12 +25,15 @@ export async function loadStyle() {
     STORAGE_KEYS.STYLE_FONT_SIZE, STORAGE_KEYS.STYLE_FONT_COLOR,
     STORAGE_KEYS.STYLE_BG_COLOR, STORAGE_KEYS.STYLE_BG_ENABLED,
     STORAGE_KEYS.STYLE_BG_OPACITY, STORAGE_KEYS.DISPLAY_MODE,
+    STORAGE_KEYS.STYLE_PANEL_COLOR, STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED,
   ]);
   currentStyle.fontSize = stored[STORAGE_KEYS.STYLE_FONT_SIZE] ?? 14;
   currentStyle.fontColor = stored[STORAGE_KEYS.STYLE_FONT_COLOR] ?? '#ffffff';
   currentStyle.bgColor = stored[STORAGE_KEYS.STYLE_BG_COLOR] ?? '#1e293b';
   currentStyle.bgOpacity = stored[STORAGE_KEYS.STYLE_BG_OPACITY] ?? 80;
   currentStyle.bgEnabled = stored[STORAGE_KEYS.STYLE_BG_ENABLED] ?? true;
+  currentStyle.panelColor = stored[STORAGE_KEYS.STYLE_PANEL_COLOR] ?? '#1a1a1a';
+  currentStyle.panelColorEnabled = stored[STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED] ?? false;
   currentStyle.displayMode = stored[STORAGE_KEYS.DISPLAY_MODE] ?? 'translation';
 }
 
@@ -48,10 +53,11 @@ export function updateDynamicStyles() {
     : '';
 
   styleEl.textContent = `
-    /* 번역된 cue-text 스타일 (트랜스크립트 패널) — 흰 배경이므로 검은 글씨 */
+    /* 번역된 cue-text 스타일 (트랜스크립트 패널).
+       글자 크기는 유데미 기본값 유지 (슬라이더는 비디오 캡션에만 적용).
+       글자색은 기본적으로 유데미 기본색 사용, 사용자가 켰을 때만 오버라이드 */
     ${SELECTORS.cueText}[data-original] {
-      font-size: ${currentStyle.fontSize}px !important;
-      color: #1a1a1a !important;
+      ${currentStyle.panelColorEnabled ? `color: ${currentStyle.panelColor} !important;` : ''}
     }
     /* 비디오 캡션 스타일 — 어두운 배경 + 밝은 글씨 */
     ${CAPTION_SELECTOR} {
