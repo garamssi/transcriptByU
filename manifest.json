@@ -3,7 +3,7 @@
   "name": "Udemy AI 번역기",
   "version": "1.1.0",
   "description": "Gemini / Claude API를 이용한 Udemy 자막 실시간 번역",
-  "permissions": ["storage", "unlimitedStorage", "activeTab", "tabs"],
+  "permissions": ["storage", "unlimitedStorage", "activeTab"],
   "host_permissions": [
     "https://api.anthropic.com/*",
     "https://generativelanguage.googleapis.com/*",

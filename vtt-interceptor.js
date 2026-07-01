@@ -1,6 +1,9 @@
 (function() {
   console.log('[UdemyTranslator:VTT-Interceptor] loaded');
 
+  // 자막 텍스트를 페이지로 브로드캐스트하지 않도록 같은 출처로만 postMessage 한다.
+  const TARGET_ORIGIN = window.location.origin;
+
   // === fetch 래핑 ===
   const originalFetch = window.fetch;
   window.fetch = async function(...args) {
@@ -10,7 +13,7 @@
       if (url && /\.vtt(\?|$)/i.test(url) && url.includes('vtt-c.udemycdn.com')) {
         console.log('[UdemyTranslator:VTT-Interceptor] detected VTT fetch:', url.substring(0, 80));
         response.clone().text().then(vttText => {
-          window.postMessage({ type: 'UDEMY_VTT_CAPTURED', vttText, url }, '*');
+          window.postMessage({ type: 'UDEMY_VTT_CAPTURED', vttText, url }, TARGET_ORIGIN);
         }).catch(() => {});
       }
     } catch (_) {}
@@ -32,7 +35,7 @@
       this.addEventListener('load', function() {
         if (this.status === 200 && this.responseText) {
           console.log('[UdemyTranslator:VTT-Interceptor] detected VTT XHR:', url.substring(0, 80));
-          window.postMessage({ type: 'UDEMY_VTT_CAPTURED', vttText: this.responseText, url }, '*');
+          window.postMessage({ type: 'UDEMY_VTT_CAPTURED', vttText: this.responseText, url }, TARGET_ORIGIN);
         }
       });
     }
