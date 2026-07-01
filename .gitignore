@@ -2,3 +2,4 @@
 .claude/
 *.iml
 .DS_Store
+docker/secrets/
