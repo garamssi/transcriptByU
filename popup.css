@@ -857,6 +857,14 @@ input[type="color"]::-webkit-color-swatch {
   margin-top: 2px;
 }
 
+.cache-row .cache-check {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .cache-item-content {
   flex: 1;
   min-width: 0;

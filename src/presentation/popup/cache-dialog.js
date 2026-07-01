@@ -92,8 +92,8 @@ export function initCacheDialog({
     else cacheList.innerHTML = renderLectures();
 
     cacheList.scrollTop = 0;
-    // 선택 도구는 레슨 화면에서만 활성화
-    cacheSelectAll.disabled = view.level !== 'lectures';
+    // 선택 도구는 모든 화면(코스/섹션/레슨)에서 활성화
+    cacheSelectAll.disabled = false;
     updateFooter();
   }
 
@@ -107,6 +107,7 @@ export function initCacheDialog({
   function renderCourses() {
     return courseNames().map(course => `
       <div class="cache-row" data-nav="course" data-course="${attr(course)}">
+        <input type="checkbox" class="cache-check" data-course="${attr(course)}" />
         <span class="cache-row-title">${escapeHtml(course)}</span>
         <span class="cache-group-count">${countInCourse(course)}</span>
         ${trashBtn(`data-course="${attr(course)}"`, '이 코스 캐시 전체 삭제')}
@@ -118,6 +119,7 @@ export function initCacheDialog({
     let html = navBar(view.course);
     html += sectionNames(view.course).map(section => `
       <div class="cache-row" data-nav="section" data-course="${attr(view.course)}" data-section="${attr(section)}">
+        <input type="checkbox" class="cache-check" data-course="${attr(view.course)}" data-section="${attr(section)}" />
         <span class="cache-row-title">${escapeHtml(section)}</span>
         <span class="cache-group-count">${countInSection(view.course, section)}</span>
         ${trashBtn(`data-course="${attr(view.course)}" data-section="${attr(section)}"`, '이 섹션 캐시 삭제')}
@@ -146,17 +148,33 @@ export function initCacheDialog({
     return html;
   }
 
+  // 체크박스 1개가 가리키는 실제 캐시 키 목록.
+  // 레슨 행은 자신의 key 하나, 코스/섹션 행은 하위 레슨 키 전체로 확장된다.
+  function keysForCheck(cb) {
+    const { key, course, section } = cb.dataset;
+    if (key !== undefined) return [key];
+    return cacheItems.filter(it => {
+      if (section !== undefined) return courseOf(it) === course && sectionOf(it) === section;
+      return courseOf(it) === course;
+    }).map(it => it.key);
+  }
+
   function getCheckedKeys() {
-    return Array.from(cacheList.querySelectorAll('.cache-check:checked')).map(cb => cb.dataset.key);
+    const keys = new Set();
+    cacheList.querySelectorAll('.cache-check:checked').forEach(cb => {
+      keysForCheck(cb).forEach(k => keys.add(k));
+    });
+    return [...keys];
   }
 
   function updateFooter() {
     const total = cacheItems.length;
-    const checked = cacheList.querySelectorAll('.cache-check:checked').length;
-    const visible = cacheList.querySelectorAll('.cache-check').length;
-    cacheDeleteSelected.disabled = checked === 0;
-    cacheSelectAll.checked = view.level === 'lectures' && visible > 0 && checked === visible;
-    cacheCount.textContent = checked > 0 ? `${checked}개 선택 / 전체 ${total}개` : `${total}개 항목`;
+    const boxes = cacheList.querySelectorAll('.cache-check').length;
+    const checkedBoxes = cacheList.querySelectorAll('.cache-check:checked').length;
+    const selected = getCheckedKeys().length;
+    cacheDeleteSelected.disabled = selected === 0;
+    cacheSelectAll.checked = boxes > 0 && checkedBoxes === boxes;
+    cacheCount.textContent = selected > 0 ? `${selected}개 선택 / 전체 ${total}개` : `${total}개 항목`;
   }
 
   async function deleteKeys(keys) {
@@ -219,6 +237,10 @@ export function initCacheDialog({
       return;
     }
 
+    // 체크박스 직접 클릭은 네비게이션 없이 change 핸들러가 처리하도록 둔다.
+    // (코스/섹션 행에도 체크박스가 있으므로 navRow 검사보다 먼저 와야 한다.)
+    if (e.target.classList.contains('cache-check')) return;
+
     // 코스/섹션 행 클릭 → 하위 화면으로 전환
     const navRow = e.target.closest('.cache-row');
     if (navRow) {
@@ -231,9 +253,6 @@ export function initCacheDialog({
       render();
       return;
     }
-
-    // 체크박스 직접 클릭은 그대로 둠
-    if (e.target.classList.contains('cache-check')) return;
 
     // 레슨 행 클릭 시 체크박스 토글
     const itemRow = e.target.closest('.cache-item');
