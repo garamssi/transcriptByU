@@ -7,12 +7,14 @@ import { escapeHtml } from '../../shared/utils.js';
  */
 export function initCacheDialog({
   openCacheDialogBtn, cacheDialogOverlay, closeCacheDialogBtn,
-  cacheList, cacheBadge, cacheCount,
+  cacheList, cacheBadge, cacheCount, cacheSearch,
   cacheSelectAll, cacheDeleteSelected, cacheDeleteAll,
 }) {
   let cacheItems = [];
   // 현재 화면: level = 'courses' | 'sections' | 'lectures'
   let view = { level: 'courses', course: null, section: null };
+  // 제목 검색어 (비어 있으면 드릴인 뷰, 있으면 평면 검색 결과 뷰)
+  let query = '';
 
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   const cmp = (a, b) => collator.compare(a || '', b || '');
@@ -37,6 +39,8 @@ export function initCacheDialog({
     cacheDialogOverlay.classList.add('open');
     cacheList.innerHTML = '<div class="cache-empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>로딩 중...</div>';
     view = { level: 'courses', course: null, section: null };
+    query = '';
+    if (cacheSearch) cacheSearch.value = '';
     cacheSelectAll.checked = false;
     cacheDeleteSelected.disabled = true;
 
@@ -82,19 +86,76 @@ export function initCacheDialog({
       cacheSelectAll.checked = false;
       cacheSelectAll.disabled = true;
       cacheDeleteSelected.disabled = true;
+      if (cacheSearch) cacheSearch.disabled = true;
       cacheCount.textContent = '0개 항목';
       return;
     }
     cacheDeleteAll.disabled = false;
+    if (cacheSearch) cacheSearch.disabled = false;
 
-    if (view.level === 'courses') cacheList.innerHTML = renderCourses();
+    // 검색어가 있으면 드릴인 대신 평면 검색 결과를 표시한다.
+    if (query) cacheList.innerHTML = renderSearch();
+    else if (view.level === 'courses') cacheList.innerHTML = renderCourses();
     else if (view.level === 'sections') cacheList.innerHTML = renderSections();
     else cacheList.innerHTML = renderLectures();
 
     cacheList.scrollTop = 0;
-    // 선택 도구는 모든 화면(코스/섹션/레슨)에서 활성화
+    // 선택 도구는 모든 화면(코스/섹션/레슨/검색)에서 활성화
     cacheSelectAll.disabled = false;
     updateFooter();
+  }
+
+  // === 제목 검색 ===
+  // 코스명·섹션명·레슨명 중 하나라도 검색어를 포함하면 매칭 (대소문자 무시).
+  function matches(it) {
+    const q = query.toLowerCase();
+    return courseOf(it).toLowerCase().includes(q)
+      || sectionOf(it).toLowerCase().includes(q)
+      || (it.lecture || '').toLowerCase().includes(q);
+  }
+
+  // 매칭 부분을 <mark>로 강조한다. 조각마다 개별 escape 하므로 안전하다.
+  function highlight(text, q) {
+    if (!q) return escapeHtml(text);
+    const lower = text.toLowerCase();
+    const ql = q.toLowerCase();
+    let out = '', i = 0;
+    for (;;) {
+      const idx = lower.indexOf(ql, i);
+      if (idx === -1) { out += escapeHtml(text.slice(i)); break; }
+      out += escapeHtml(text.slice(i, idx));
+      out += `<mark class="cache-hl">${escapeHtml(text.slice(idx, idx + ql.length))}</mark>`;
+      i = idx + ql.length;
+    }
+    return out;
+  }
+
+  function renderSearch() {
+    const results = cacheItems.filter(matches).sort((a, b) =>
+      cmp(courseOf(a), courseOf(b)) || cmp(sectionOf(a), sectionOf(b)) || cmp(a.lecture, b.lecture));
+
+    if (results.length === 0) {
+      return '<div class="cache-empty"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>검색 결과가 없습니다</div>';
+    }
+
+    return results.map(item => {
+      const title = item.lecture || '(제목 없음)';
+      const path = `${courseOf(item)} › ${sectionOf(item)}`;
+      const tip = `${path} › ${title}`;
+      return `
+      <div class="cache-item" data-key="${attr(item.key)}" title="${attr(tip)}">
+        <input type="checkbox" class="cache-check" data-key="${attr(item.key)}" />
+        <div class="cache-item-content">
+          <div class="cache-item-lecture">${highlight(title, query)}</div>
+          <div class="cache-item-path">${highlight(path, query)}</div>
+          <div class="cache-item-meta">
+            <span class="cache-item-tag">${item.count}개 자막</span>
+            <span class="cache-item-tag">${escapeHtml(item.lang)}</span>
+          </div>
+        </div>
+        <button class="cache-item-del" data-key="${attr(item.key)}" title="이 레슨 캐시 삭제">${trashSvg}</button>
+      </div>`;
+    }).join('');
   }
 
   function navBar(crumb) {
@@ -196,6 +257,14 @@ export function initCacheDialog({
   cacheDialogOverlay.addEventListener('click', (e) => {
     if (e.target === cacheDialogOverlay) cacheDialogOverlay.classList.remove('open');
   });
+
+  if (cacheSearch) {
+    cacheSearch.addEventListener('input', () => {
+      query = cacheSearch.value.trim();
+      cacheSelectAll.checked = false;
+      render();
+    });
+  }
 
   cacheSelectAll.addEventListener('change', () => {
     cacheList.querySelectorAll('.cache-check').forEach(cb => { cb.checked = cacheSelectAll.checked; });

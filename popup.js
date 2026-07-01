@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cacheList: $('cacheList'),
     cacheBadge: $('cacheBadge'),
     cacheCount: $('cacheCount'),
+    cacheSearch: $('cacheSearch'),
     cacheSelectAll: $('cacheSelectAll'),
     cacheDeleteSelected: $('cacheDeleteSelected'),
     cacheDeleteAll: $('cacheDeleteAll'),
