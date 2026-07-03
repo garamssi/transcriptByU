@@ -29,32 +29,101 @@ Write-Host '  Claude Code 프록시 서버 (Docker)'
 Write-Host '========================================'
 
 # 0) Docker 설치 및 데몬 구동 확인
-try {
-    docker info *> $null
-} catch {
+#    주의: WinPS 5.1 에서는 native 명령의 stderr 가 EAP='Stop' 과 만나 "종료성 오류"로
+#    승격된다. docker info 는 정상일 때도 경고를 stderr 로 내보내므로, 예전처럼
+#    `docker info *> $null` 을 try/catch 로 감싸면 docker 가 멀쩡해도 catch 로 빠져
+#    "명령을 찾을 수 없습니다" 가 잘못 출력됐다. 존재 확인은 Get-Command 으로, 데몬 확인은
+#    EAP 를 잠시 낮춰 종료코드만 본다. (WinPS 5.1 / PowerShell 7 모두 안전)
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Host 'ERROR: docker 명령을 찾을 수 없습니다. Docker Desktop 을 설치하세요.' -ForegroundColor Red
     Read-Host '종료하려면 Enter'
     exit 1
 }
-if ($LASTEXITCODE -ne 0) {
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+docker info 2>&1 | Out-Null
+$dockerDaemonOk = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = $prevEAP
+if (-not $dockerDaemonOk) {
     Write-Host 'ERROR: Docker Desktop 이 실행 중이 아닙니다. 먼저 Docker Desktop 을 실행하세요.' -ForegroundColor Red
     Read-Host '종료하려면 Enter'
     exit 1
 }
 
-# 1) 호스트 자격증명 파일 복사
+# 1) 호스트 자격증명 파일 자동 탐색 + 복사
 Write-Host '[1/3] claude 로그인 자격증명 확보...'
-$base = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }
-$src = Join-Path $base '.credentials.json'
-if (-not (Test-Path $src)) {
-    Write-Host "ERROR: 자격증명 파일이 없습니다: $src" -ForegroundColor Red
-    Write-Host '       호스트에서 claude 로그인이 되어 있는지 확인하세요.' -ForegroundColor Red
+
+# claude CLI 설치 여부(진단용). Docker 방식은 컨테이너 안 claude 를 쓰므로 호스트 claude 가
+# 없어도 "자격증명 파일"만 있으면 되지만, 파일이 없을 때 안내를 정확히 하기 위해 확인한다.
+$claudeInstalled = [bool](Get-Command claude -ErrorAction SilentlyContinue)
+if ($claudeInstalled) {
+    Write-Host '      -> claude CLI 감지됨'
+} else {
+    Write-Host '      -> (참고) 호스트에 claude CLI 가 없습니다. Docker 방식은 자격증명 파일만 있으면 됩니다.' -ForegroundColor DarkGray
+}
+
+# 자격증명 후보 경로(우선순위): CLAUDE_CONFIG_DIR > %USERPROFILE%\.claude > $HOME\.claude
+$credCandidates = @()
+if ($env:CLAUDE_CONFIG_DIR) { $credCandidates += (Join-Path $env:CLAUDE_CONFIG_DIR '.credentials.json') }
+if ($env:USERPROFILE)       { $credCandidates += (Join-Path $env:USERPROFILE '.claude\.credentials.json') }
+if ($HOME)                  { $credCandidates += (Join-Path $HOME '.claude\.credentials.json') }
+$credCandidates = $credCandidates | Select-Object -Unique
+
+$src = $credCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+# 파일을 못 찾았을 때: 이미 만들어 둔 사본(docker\secrets)이 아직 유효하면 그대로 재사용한다.
+# (이 PC 의 Claude Code 는 토큰을 파일이 아니라 Windows 자격증명 관리자에 저장했을 수 있음)
+$reuseExisting = $false
+if (-not $src -and (Test-Path $CredFile)) {
+    try {
+        $o = (Get-Content $CredFile -Raw | ConvertFrom-Json).claudeAiOauth
+        if ($o -and $o.expiresAt) {
+            $expE = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$o.expiresAt).ToLocalTime()
+            if ($expE -gt (Get-Date)) {
+                Write-Host "      -> 소스 파일은 없지만 기존 사본이 유효합니다 (만료 $($expE.ToString('u'))). 이를 재사용합니다." -ForegroundColor Yellow
+                $reuseExisting = $true
+            } else {
+                Write-Host "      [!] 기존 사본이 만료됨 ($($expE.ToString('u'))). 새 자격증명이 필요합니다." -ForegroundColor Yellow
+            }
+        }
+    } catch { }
+}
+
+if (-not $src -and -not $reuseExisting) {
+    Write-Host 'ERROR: claude 로그인 자격증명(.credentials.json)을 찾지 못했습니다.' -ForegroundColor Red
+    Write-Host '       확인한 파일 위치:' -ForegroundColor Red
+    $credCandidates | ForEach-Object { Write-Host "         - $_" -ForegroundColor Red }
+    Write-Host ''
+    Write-Host '       [원인] 이 PC 의 Claude Code 는 토큰을 파일이 아니라 Windows 자격증명 관리자' -ForegroundColor Yellow
+    Write-Host '       (Credential Manager)에 저장했을 수 있습니다. 아래로 엔트리를 확인하세요:' -ForegroundColor Yellow
+    Write-Host '         cmdkey /list | findstr /I "Claude Anthropic"' -ForegroundColor Yellow
+    if (-not $claudeInstalled) {
+        Write-Host '       claude CLI 설치 후 로그인: npm install -g @anthropic-ai/claude-code' -ForegroundColor Yellow
+    }
     Read-Host '종료하려면 Enter'
     exit 1
 }
-New-Item -ItemType Directory -Force -Path $SecretDir | Out-Null
-Copy-Item -Path $src -Destination $CredFile -Force
-Write-Host "      -> $CredFile 저장 완료"
+
+if (-not $reuseExisting) {
+    Write-Host "      -> 자격증명 발견: $src"
+
+    # 토큰 만료 여부 확인(경고만 — 만료돼도 계속 진행). 파싱 실패해도 무시.
+    try {
+        $oauth = (Get-Content $src -Raw | ConvertFrom-Json).claudeAiOauth
+        if ($oauth -and $oauth.expiresAt) {
+            $exp = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$oauth.expiresAt).ToLocalTime()
+            if ($exp -lt (Get-Date)) {
+                Write-Host "      [!] 경고: 토큰이 만료됨 ($($exp.ToString('u'))). 호스트에서 재로그인 후 다시 실행을 권장합니다." -ForegroundColor Yellow
+            } else {
+                Write-Host "      -> 토큰 만료 예정: $($exp.ToString('u'))"
+            }
+        }
+    } catch { }
+
+    New-Item -ItemType Directory -Force -Path $SecretDir | Out-Null
+    Copy-Item -Path $src -Destination $CredFile -Force
+    Write-Host "      -> $CredFile 저장 완료"
+}
 
 # 2) 이미지 빌드
 Write-Host '[2/3] 이미지 빌드... (최초 1회만 오래 걸립니다)'
@@ -67,7 +136,12 @@ if ($LASTEXITCODE -ne 0) {
 
 # 3) 컨테이너 실행 (기존 정리 후 백그라운드 실행)
 Write-Host '[3/3] 컨테이너 실행...'
-docker rm -f $Container *> $null
+# 기존 컨테이너 제거. 컨테이너가 없으면 docker 가 stderr 로 경고를 내는데, WinPS 5.1 에서
+# EAP='Stop' 과 만나면 종료성 오류가 되어 스크립트가 죽는다. EAP 를 잠시 낮춰 조용히 처리.
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+docker rm -f $Container 2>&1 | Out-Null
+$ErrorActionPreference = $prevEAP
 
 # credentials 절대경로. Windows 절대경로(C:\...)의 드라이브 콜론과 -v 구분자 콜론이
 # 겹치지만 Docker Desktop 이 드라이브 문자를 인식한다. 마운트 실패 시 windows-setup.md 의
