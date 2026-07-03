@@ -68,7 +68,8 @@ function callClaude(prompt, model) {
     if (invocation.stdinInput !== null) {
       // 자식이 stdin 을 일찍 닫아(EPIPE 등) 스트림에서 'error' 가 나도
       // 서버 전체가 죽지 않도록 방어. 실제 실패는 proc 의 'error'/'close' 로 처리됨.
-      proc.stdin.on('error', () => {});
+      // (진단용으로 로그만 남기고 삼킨다.)
+      proc.stdin.on('error', (e) => console.error(`[stdin] ${e.message}`));
       proc.stdin.write(invocation.stdinInput);
       proc.stdin.end();
     }

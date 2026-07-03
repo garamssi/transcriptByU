@@ -42,13 +42,13 @@ powershell -ExecutionPolicy Bypass -File .\docs\start-proxy.ps1
 powershell -ExecutionPolicy Bypass -File .\docker\run.ps1
 ```
 
-- `%USERPROFILE%\.claude\.credentials.json`을 컨테이너로 마운트해 "내 로컬 로그인"을 그대로 사용합니다.
+- `%USERPROFILE%\.claude\.credentials.json`을 `docker\secrets\`로 복사한 뒤 그 사본을 컨테이너에 마운트해 "내 로컬 로그인"을 그대로 사용합니다. (호스트에서 다시 로그인했다면 `run.ps1`을 다시 실행해야 갱신됩니다.)
 - 백그라운드(`-d`)로 실행되어 창을 닫아도 서버가 유지되고, 재부팅 시 Docker Desktop과 함께 자동으로 다시 뜹니다.
 - 중지: `docker stop claude-proxy` / 로그: `docker logs -f claude-proxy`
 
 ### Docker 볼륨 경로 문제 시
 
-`-v "C:\...\credentials.json:/root/.claude/.credentials.json"`에서 마운트가 안 되면, `run.ps1`의 해당 줄을 포워드 슬래시 형식으로 바꿔 시도하세요. 예: `C:\Users\me\...` → `//c/Users/me/...`.
+`-v "C:\...\credentials.json:/root/.claude/.credentials.json"`에서 마운트가 안 되면, `run.ps1`의 해당 줄을 포워드 슬래시 형식으로 바꿔 시도하세요. 예: `C:\Users\me\...` → `C:/Users/me/...`.
 
 ---
 
