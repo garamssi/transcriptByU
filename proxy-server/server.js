@@ -1,6 +1,8 @@
 const http = require('node:http');
 const { spawn, execFileSync } = require('node:child_process');
+const { buildClaudeInvocation } = require('./claude-invocation');
 
+const isWindows = process.platform === 'win32';
 const PORT = process.env.PORT || 3456;
 const CLI_TIMEOUT = 120_000;
 const MAX_CONCURRENT = 3;
@@ -34,13 +36,15 @@ function callClaude(prompt, model) {
     const chunks = [];
     const errChunks = [];
 
-    const args = ['-p', prompt];
-    if (model) args.push('--model', model);
+    let invocation;
+    try {
+      invocation = buildClaudeInvocation({ prompt, model, isWindows, timeout: CLI_TIMEOUT });
+    } catch (err) {
+      reject(err); // INVALID_MODEL 등은 /translate catch 에서 500 으로 응답
+      return;
+    }
 
-    const proc = spawn('claude', args, {
-      timeout: CLI_TIMEOUT,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const proc = spawn(invocation.command, invocation.args, invocation.options);
 
     proc.stdout.on('data', (d) => chunks.push(d));
     proc.stderr.on('data', (d) => errChunks.push(d));
@@ -57,6 +61,12 @@ function callClaude(prompt, model) {
         resolve(Buffer.concat(chunks).toString().trim());
       }
     });
+
+    // Windows 경로: 프롬프트를 stdin 으로 전달(인젝션 방지). 비-Windows 는 stdinInput=null.
+    if (invocation.stdinInput !== null) {
+      proc.stdin.write(invocation.stdinInput);
+      proc.stdin.end();
+    }
   });
 }
 
@@ -142,7 +152,7 @@ const server = http.createServer(async (req, res) => {
 // === 시작 ===
 
 try {
-  const version = execFileSync('claude', ['--version'], { encoding: 'utf-8', timeout: 5000 }).trim();
+  const version = execFileSync('claude', ['--version'], { encoding: 'utf-8', timeout: 5000, shell: isWindows }).trim();
   console.log(`Claude CLI: ${version}`);
 } catch {
   console.error('WARNING: claude CLI를 찾을 수 없습니다. PATH를 확인하세요.');
