@@ -10,9 +10,10 @@
 export async function callGemini(systemPrompt, userText, apiKey, model, maxTokens) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  // 2.5 모델은 thinking이 기본 활성화 → 번역에 불필요하므로 비활성화
+  // Flash 계열은 thinking이 기본 활성화 → 자막 번역엔 불필요하므로 비활성화(비용·지연 절감).
+  // Pro 계열은 최소 thinking budget이 강제되어 0 설정 시 에러가 날 수 있으므로 손대지 않는다.
   const genConfig = { maxOutputTokens: maxTokens };
-  if (model.includes('2.5')) {
+  if (model.includes('flash')) {
     genConfig.thinkingConfig = { thinkingBudget: 0 };
   }
 

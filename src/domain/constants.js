@@ -71,7 +71,7 @@ export const MODELS = {
   gemini: [
     { value: 'gemini-3.1-flash-lite', label: 'Flash-Lite 3.1 (빠름/저렴)' },
     { value: 'gemini-3.5-flash', label: 'Flash 3.5 (권장)' },
-    { value: 'gemini-2.5-pro', label: '2.5 Pro (고품질)' },
+    { value: 'gemini-3.1-pro', label: '3.1 Pro (고품질)' },
   ],
   'claude-code': [
     { value: 'claude-sonnet-5', label: 'Sonnet 5 (빠름)' },
