@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # Claude Code 프록시 서버 (Docker) — Windows 11
 #   1) %USERPROFILE%\.claude\.credentials.json 를 docker\secrets 로 복사
 #      (macOS 의 Keychain 추출을 대체 — Windows 는 자격증명이 파일로 저장됨)
@@ -8,6 +8,11 @@
 #   powershell -ExecutionPolicy Bypass -File .\docker\run.ps1
 
 $ErrorActionPreference = 'Stop'
+
+# PowerShell 7.3+ 에서 네이티브 명령(docker)의 비정상 종료코드가 예외로 승격되지 않도록
+# 한다. 아래의 $LASTEXITCODE 기반 오류 처리가 의도대로 동작하게 함. WinPS 5.1 에선 무시됨.
+$PSNativeCommandUseErrorActionPreference = $false
+
 $Host.UI.RawUI.WindowTitle = 'Claude Code Proxy (Docker)'
 
 # 프로젝트 루트로 이동 (docker/ 의 상위)
