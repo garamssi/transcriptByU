@@ -62,8 +62,13 @@ function callClaude(prompt, model) {
       }
     });
 
-    // Windows 경로: 프롬프트를 stdin 으로 전달(인젝션 방지). 비-Windows 는 stdinInput=null.
+    // Windows 경로: 프롬프트를 stdin 으로 전달(인젝션 방지).
+    // stdinInput 이 non-null 인 경우는 Windows 분기뿐이며, 그때 stdio[0]='pipe' 라
+    // proc.stdin 이 존재한다(비-Windows 는 stdinInput=null 이라 여기 진입하지 않음).
     if (invocation.stdinInput !== null) {
+      // 자식이 stdin 을 일찍 닫아(EPIPE 등) 스트림에서 'error' 가 나도
+      // 서버 전체가 죽지 않도록 방어. 실제 실패는 proc 의 'error'/'close' 로 처리됨.
+      proc.stdin.on('error', () => {});
       proc.stdin.write(invocation.stdinInput);
       proc.stdin.end();
     }
