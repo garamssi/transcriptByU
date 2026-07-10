@@ -1,0 +1,24 @@
+/* 로컬 폰트 번들 (CDN 금지 — MV3 CSP)
+   woff2 파일을 확장 루트의 fonts/ 폴더에 넣으세요. 자세한 건 fonts/README.md 참고. */
+
+/* ===== Pretendard (본문·UI) ===== */
+@font-face { font-family: "Pretendard"; font-weight: 400; font-display: swap;
+  src: url("fonts/Pretendard-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 500; font-display: swap;
+  src: url("fonts/Pretendard-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 600; font-display: swap;
+  src: url("fonts/Pretendard-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 700; font-display: swap;
+  src: url("fonts/Pretendard-Bold.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 800; font-display: swap;
+  src: url("fonts/Pretendard-ExtraBold.woff2") format("woff2"); }
+
+/* ===== JetBrains Mono (숫자·값 뱃지·모노 라벨) ===== */
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: swap;
+  src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap;
+  src: url("fonts/JetBrainsMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 600; font-display: swap;
+  src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: swap;
+  src: url("fonts/JetBrainsMono-Bold.woff2") format("woff2"); }
