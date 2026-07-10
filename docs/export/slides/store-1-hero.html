@@ -1,0 +1,51 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;} html,body{margin:0;background:#08070f;font-family:"Pretendard",system-ui,sans-serif;-webkit-font-smoothing:antialiased;width:1280px;height:800px;overflow:hidden;} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
+</head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="ssgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B26BFF"></stop><stop offset=".55" stop-color="#8B3DF5"></stop><stop offset="1" stop-color="#5B21B6"></stop></linearGradient>
+  <symbol id="ssmark" viewBox="0 0 100 100">
+    <rect x="4" y="4" width="92" height="92" rx="26" fill="url(#ssgrad)"></rect>
+    <path d="M31 26 L31 52 A19 19 0 0 0 69 52 L69 26" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"></path>
+    <rect x="30" y="74" width="40" height="9" rx="4.5" fill="#fff" opacity=".95"></rect>
+    <rect x="30" y="74" width="15" height="9" rx="4.5" fill="#3DF5C8"></rect>
+  </symbol>
+</defs></svg>
+<div style="width:1280px; height:800px; border-radius:20px; overflow:hidden; position:relative; background:radial-gradient(1100px 800px at 78% 30%, #2a1a52 0%, #120b22 55%, #0a0713 100%);">
+    <div style="position:absolute; top:-120px; left:-80px; width:520px; height:520px; border-radius:50%; background:radial-gradient(circle,rgba(139,61,245,.35),transparent 65%);"></div>
+    <div style="position:absolute; inset:0; display:flex; align-items:center;">
+      <!-- left copy -->
+      <div style="width:600px; padding:0 0 0 92px;">
+        <div style="display:inline-flex; align-items:center; gap:12px; margin-bottom:34px;">
+          <svg style="width:56px;height:56px; filter:drop-shadow(0 10px 24px rgba(139,61,245,.6))"><use href="#ssmark"></use></svg>
+          <span style="font-size:22px; font-weight:800; color:#fff; letter-spacing:-.01em;">Udemy Live Translator</span>
+        </div>
+        <h1 style="margin:0 0 24px; font-size:64px; line-height:1.08; font-weight:800; letter-spacing:-.03em; color:#fff;">유데미 강의를<br><span style="color:#CDA8FF;">모국어 자막</span>으로</h1>
+        <p style="margin:0 0 40px; font-size:22px; line-height:1.6; color:rgba(244,242,250,.6); max-width:480px;">영어 강의도 부담 없이. AI가 실시간으로 자막을 번역해 화면에 바로 얹어줍니다.</p>
+        <div style="display:flex; gap:14px; flex-wrap:wrap;">
+          <span style="display:inline-flex; align-items:center; gap:9px; padding:14px 22px; border-radius:14px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); font-size:16px; color:#fff; font-weight:600; white-space:nowrap; flex-shrink:0;"><span style="width:9px;height:9px;border-radius:50%;background:#3DF5C8;box-shadow:0 0 10px #3DF5C8;"></span>실시간 번역</span>
+          <span style="display:inline-flex; align-items:center; gap:9px; padding:14px 22px; border-radius:14px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); font-size:16px; color:#fff; font-weight:600; white-space:nowrap; flex-shrink:0;">Gemini · Claude 지원</span>
+        </div>
+      </div>
+      <!-- right: floating popup -->
+      <div style="flex:1; display:flex; align-items:center; justify-content:center;">
+        <div style="width:360px; border-radius:24px; overflow:hidden; background:linear-gradient(180deg,#141020,#0d0a16); border:1px solid rgba(255,255,255,.1); box-shadow:0 60px 120px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(139,61,245,.12); transform:rotate(-3deg);">
+          <div style="padding:20px; display:flex; align-items:center; gap:13px; background:radial-gradient(120% 140% at 0% 0%, rgba(139,61,245,.22), transparent 60%);">
+            <svg style="width:42px;height:42px"><use href="#ssmark"></use></svg>
+            <div style="flex:1;"><div style="font-size:16px; font-weight:800; color:#fff;">Udemy Live Translator</div><div style="font-size:12px; color:rgba(244,242,250,.5);">실시간 자막 번역</div></div>
+            <div style="width:50px;height:29px;border-radius:999px;background:linear-gradient(90deg,#8B3DF5,#B26BFF);padding:3px;display:flex;justify-content:flex-end;box-shadow:0 0 18px rgba(139,61,245,.5);"><div style="width:23px;height:23px;border-radius:50%;background:#fff;"></div></div>
+          </div>
+          <div style="padding:0 18px 20px; display:flex; flex-direction:column; gap:13px;">
+            <div style="display:flex; align-items:center; gap:10px; padding:12px 15px; border-radius:13px; background:rgba(52,211,153,.08); border:1px solid rgba(52,211,153,.2);"><span style="width:9px;height:9px;border-radius:50%;background:#34D399;box-shadow:0 0 10px #34D399;animation:pulse 2.2s infinite;"></span><span style="font-size:13.5px; color:#fff; font-weight:500;">Gemini 준비됨</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#34D399;letter-spacing:.1em;">LIVE</span></div>
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
+              <div style="padding:12px 6px; border-radius:12px; border:1px solid rgba(255,255,255,.08); text-align:center; font-size:12px; font-weight:700; color:rgba(244,242,250,.8);">Claude<br>Code</div>
+              <div style="padding:12px 6px; border-radius:12px; border:1px solid rgba(178,107,255,.7); background:linear-gradient(180deg,rgba(139,61,245,.22),rgba(139,61,245,.06)); text-align:center; font-size:13px; font-weight:800; color:#fff; box-shadow:0 0 20px rgba(139,61,245,.35);">Gemini</div>
+              <div style="padding:12px 6px; border-radius:12px; border:1px solid rgba(255,255,255,.08); text-align:center; font-size:12px; font-weight:700; color:rgba(244,242,250,.8);">Claude</div>
+            </div>
+            <div style="height:46px; border-radius:12px; background:linear-gradient(90deg,#8B3DF5,#B26BFF); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:#fff; box-shadow:0 12px 26px -8px rgba(139,61,245,.7);">저장</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body></html>

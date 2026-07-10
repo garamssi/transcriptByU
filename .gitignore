@@ -3,3 +3,8 @@
 *.iml
 .DS_Store
 docker/secrets/
+
+# 폰트 원본 배포본(중복) — 확장이 쓰는 woff2는 fonts/에 설치됨
+docs/export/Pretendard-*/
+docs/export/JetBrainsMono-*/
+docs/export/*.woff2

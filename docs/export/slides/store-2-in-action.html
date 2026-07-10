@@ -1,0 +1,54 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;} html,body{margin:0;background:#08070f;font-family:"Pretendard",system-ui,sans-serif;-webkit-font-smoothing:antialiased;width:1280px;height:800px;overflow:hidden;} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}</style>
+</head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="ssgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B26BFF"></stop><stop offset=".55" stop-color="#8B3DF5"></stop><stop offset="1" stop-color="#5B21B6"></stop></linearGradient>
+  <symbol id="ssmark" viewBox="0 0 100 100">
+    <rect x="4" y="4" width="92" height="92" rx="26" fill="url(#ssgrad)"></rect>
+    <path d="M31 26 L31 52 A19 19 0 0 0 69 52 L69 26" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"></path>
+    <rect x="30" y="74" width="40" height="9" rx="4.5" fill="#fff" opacity=".95"></rect>
+    <rect x="30" y="74" width="15" height="9" rx="4.5" fill="#3DF5C8"></rect>
+  </symbol>
+</defs></svg>
+<div style="width:1280px; height:800px; border-radius:20px; overflow:hidden; position:relative; background:radial-gradient(1000px 700px at 20% 0%, #241546 0%, #0d0a18 60%);">
+    <div style="position:absolute; top:64px; left:0; right:0; text-align:center;">
+      <h2 style="margin:0 0 12px; font-size:44px; font-weight:800; letter-spacing:-.02em; color:#fff;">보는 순간, 바로 이해되는 자막</h2>
+      <p style="margin:0; font-size:20px; color:rgba(244,242,250,.55);">원본과 번역을 동시에. 강의 흐름을 놓치지 않습니다.</p>
+    </div>
+    <!-- mock player -->
+    <div style="position:absolute; left:50%; top:216px; transform:translateX(-50%); width:920px; border-radius:16px; overflow:hidden; background:#000; border:1px solid rgba(255,255,255,.1); box-shadow:0 50px 100px -30px rgba(0,0,0,.8);">
+      <!-- video area -->
+      <div style="position:relative; aspect-ratio:16/9; background:linear-gradient(135deg,#12203a 0%,#0a1526 50%,#151030 100%); overflow:hidden;">
+        <!-- fake code editor scene -->
+        <div style="position:absolute; left:56px; top:52px; right:120px; bottom:150px; border-radius:10px; background:rgba(8,10,20,.7); border:1px solid rgba(255,255,255,.08); padding:18px 20px; font-family:'JetBrains Mono',monospace; font-size:14px; line-height:1.9;">
+          <div style="color:#7dd3fc;">public class <span style="color:#fbbf24;">BankAccount</span> {</div>
+          <div style="color:rgba(255,255,255,.5); padding-left:22px;">private <span style="color:#c084fc;">BigDecimal</span> balance;</div>
+          <div style="color:rgba(255,255,255,.5); padding-left:22px;">public void <span style="color:#4ade80;">deposit</span>(BigDecimal amount) {</div>
+          <div style="color:rgba(255,255,255,.5); padding-left:44px;">this.balance = balance.<span style="color:#4ade80;">add</span>(amount);</div>
+          <div style="color:rgba(255,255,255,.5); padding-left:22px;">}</div>
+          <div style="color:#7dd3fc;">}</div>
+        </div>
+        <!-- instructor label -->
+        <div style="position:absolute; left:56px; top:24px; font-size:13px; color:rgba(255,255,255,.5); font-family:'JetBrains Mono',monospace;">Section 6 · Building Banking Systems</div>
+        <!-- captions -->
+        <div style="position:absolute; left:0; right:0; bottom:26px; display:flex; flex-direction:column; align-items:center; gap:8px;">
+          <span style="background:rgba(0,0,0,.72); color:rgba(255,255,255,.72); font-size:19px; padding:6px 16px; border-radius:6px;">So here we use BigDecimal to avoid floating-point errors.</span>
+          <span style="background:rgba(30,41,59,.85); color:#fff; font-size:22px; font-weight:600; padding:7px 18px; border-radius:6px; border-left:3px solid #B26BFF;">그래서 여기서는 부동소수점 오류를 피하려고 BigDecimal을 씁니다.</span>
+        </div>
+        <!-- badge -->
+        <div style="position:absolute; right:24px; top:24px; display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; background:rgba(139,61,245,.22); border:1px solid rgba(178,107,255,.5); ">
+          <svg style="width:18px;height:18px"><use href="#ssmark"></use></svg>
+          <span style="font-size:13px; font-weight:600; color:#fff;">한국어 번역 중</span>
+          <span style="width:7px;height:7px;border-radius:50%;background:#3DF5C8;box-shadow:0 0 8px #3DF5C8;animation:pulse 1.8s infinite;"></span>
+        </div>
+      </div>
+      <!-- player controls -->
+      <div style="height:56px; background:#0e0e12; display:flex; align-items:center; gap:16px; padding:0 20px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+        <div style="flex:1; height:5px; border-radius:3px; background:rgba(255,255,255,.15); position:relative;"><div style="position:absolute;left:0;top:0;bottom:0;width:42%;border-radius:3px;background:#B26BFF;"></div><div style="position:absolute;left:42%;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#fff;"></div></div>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:rgba(255,255,255,.6);">08:24 / 19:47</span>
+      </div>
+    </div>
+  </div>
+</body></html>
