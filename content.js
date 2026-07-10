@@ -88,6 +88,18 @@
     currentStyle.panelColorEnabled = stored[STORAGE_KEYS.STYLE_PANEL_COLOR_ENABLED] ?? false;
     currentStyle.displayMode = stored[STORAGE_KEYS.DISPLAY_MODE] ?? "translation";
   }
+  var OVERLAY_FONTS = [
+    [400, "Pretendard-Regular.woff2"],
+    [500, "Pretendard-Medium.woff2"],
+    [600, "Pretendard-SemiBold.woff2"],
+    [700, "Pretendard-Bold.woff2"]
+  ];
+  function buildFontFaces() {
+    if (typeof chrome === "undefined" || !chrome.runtime?.getURL) return "";
+    return OVERLAY_FONTS.map(
+      ([w, file]) => `@font-face{font-family:"Pretendard";font-weight:${w};font-display:swap;src:url("${chrome.runtime.getURL("fonts/" + file)}") format("woff2");}`
+    ).join("\n");
+  }
   function updateDynamicStyles() {
     let styleEl = document.getElementById("udemy-translator-dynamic-style");
     if (!styleEl) {
@@ -95,19 +107,25 @@
       styleEl.id = "udemy-translator-dynamic-style";
       document.head.appendChild(styleEl);
     }
-    const bgCaption = currentStyle.bgEnabled ? `background-color: ${hexToRgba(currentStyle.bgColor, currentStyle.bgOpacity)} !important; padding: 4px 10px !important; border-radius: 4px !important;` : "";
+    const bgCaption = currentStyle.bgEnabled ? `background-color: ${hexToRgba(currentStyle.bgColor, currentStyle.bgOpacity)} !important;` : "";
     styleEl.textContent = `
+    ${buildFontFaces()}
     /* \uBC88\uC5ED\uB41C cue-text \uC2A4\uD0C0\uC77C (\uD2B8\uB79C\uC2A4\uD06C\uB9BD\uD2B8 \uD328\uB110).
        \uAE00\uC790 \uD06C\uAE30\uB294 \uC720\uB370\uBBF8 \uAE30\uBCF8\uAC12 \uC720\uC9C0 (\uC2AC\uB77C\uC774\uB354\uB294 \uBE44\uB514\uC624 \uCEA1\uC158\uC5D0\uB9CC \uC801\uC6A9).
        \uAE00\uC790\uC0C9\uC740 \uAE30\uBCF8\uC801\uC73C\uB85C \uC720\uB370\uBBF8 \uAE30\uBCF8\uC0C9 \uC0AC\uC6A9, \uC0AC\uC6A9\uC790\uAC00 \uCF30\uC744 \uB54C\uB9CC \uC624\uBC84\uB77C\uC774\uB4DC */
     ${SELECTORS.cueText}[data-original] {
       ${currentStyle.panelColorEnabled ? `color: ${currentStyle.panelColor} !important;` : ""}
     }
-    /* \uBE44\uB514\uC624 \uCEA1\uC158 \uC2A4\uD0C0\uC77C \u2014 \uC5B4\uB450\uC6B4 \uBC30\uACBD + \uBC1D\uC740 \uAE00\uC528 */
+    /* \uBE44\uB514\uC624 \uBC88\uC5ED \uCEA1\uC158 \u2014 \uC5B4\uB450\uC6B4 \uBC30\uACBD + \uBC1D\uC740 \uAE00\uC528 + \uC88C\uCE21 \uBCF4\uB77C \uC561\uC13C\uD2B8 \uBC14 (\uC2DC\uC548 SS2) */
     ${CAPTION_SELECTOR} {
+      font-family: "Pretendard", system-ui, -apple-system, sans-serif !important;
       font-size: ${currentStyle.fontSize * 1.5}px !important;
+      font-weight: 600 !important;
       color: ${currentStyle.fontColor} !important;
       opacity: 1 !important;
+      padding: 7px 18px !important;
+      border-radius: 6px !important;
+      border-left: 3px solid #B26BFF !important;
       ${bgCaption}
     }
     /* \uC6D0\uBCF8 \uD14D\uC2A4\uD2B8 (\uD2B8\uB79C\uC2A4\uD06C\uB9BD\uD2B8 \uD328\uB110 both \uBAA8\uB4DC\uC5D0\uC11C \uBC88\uC5ED \uC544\uB798 \uBCF4\uC870 \uD45C\uC2DC).
@@ -125,11 +143,17 @@
     .${ORIGINAL_CLASS}.error {
       color: #e74c3c !important;
     }
-    /* \uCEA1\uC158 both \uBAA8\uB4DC: \uC6D0\uBCF8 \uD14D\uC2A4\uD2B8 (\uBC88\uC5ED \uC544\uB798 \uC791\uAC8C \uD45C\uC2DC) */
+    /* \uCEA1\uC158 both \uBAA8\uB4DC: \uC6D0\uBCF8 \uC790\uB9C9 \u2014 \uC791\uC740 \uC5B4\uB450\uC6B4 pill (\uC2DC\uC548 SS2) */
     .caption-original {
-      font-size: ${Math.round(currentStyle.fontSize * 1.1)}px !important;
-      color: rgba(255, 255, 255, 0.6) !important;
-      margin-top: 4px;
+      font-family: "Pretendard", system-ui, -apple-system, sans-serif !important;
+      display: inline-block;
+      font-size: ${Math.round(currentStyle.fontSize * 1.3)}px !important;
+      font-weight: 400 !important;
+      color: rgba(255, 255, 255, 0.72) !important;
+      background: rgba(0, 0, 0, 0.72) !important;
+      padding: 5px 14px !important;
+      border-radius: 6px !important;
+      margin-top: 8px;
     }
   `;
   }
@@ -238,6 +262,53 @@
     vttPending = false;
   }
 
+  // src/presentation/content/badge-manager.js
+  var MARK_SVG = '<svg viewBox="0 0 100 100" aria-hidden="true"><rect x="4" y="4" width="92" height="92" rx="26" fill="#8B3DF5"/><path d="M31 26 L31 52 A19 19 0 0 0 69 52 L69 26" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><rect x="30" y="74" width="40" height="9" rx="4.5" fill="#fff"/><rect x="30" y="74" width="15" height="9" rx="4.5" fill="#3DF5C8"/></svg>';
+  var badgeEl = null;
+  var anchorEl = null;
+  var lang = "\uD55C\uAD6D\uC5B4";
+  var enabled = true;
+  function build() {
+    const el = document.createElement("div");
+    el.className = "udemy-translator-badge";
+    el.innerHTML = `${MARK_SVG}<span class="utb-text"></span><span class="utb-dot"></span>`;
+    el.querySelector(".utb-text").textContent = `${lang} \uBC88\uC5ED \uC911`;
+    return el;
+  }
+  function mountTarget() {
+    if (anchorEl && anchorEl.offsetParent) return anchorEl.offsetParent;
+    const video = document.querySelector("video");
+    return video?.parentElement || null;
+  }
+  function setBadgeLang(l) {
+    lang = l || "\uD55C\uAD6D\uC5B4";
+    if (badgeEl) badgeEl.querySelector(".utb-text").textContent = `${lang} \uBC88\uC5ED \uC911`;
+  }
+  function setBadgeEnabled(v) {
+    enabled = v !== false;
+    if (!enabled) hideBadge();
+    else if (anchorEl) showBadge(anchorEl);
+  }
+  function showBadge(anchor) {
+    if (anchor) anchorEl = anchor;
+    if (!enabled) return;
+    const target = mountTarget();
+    if (!target) return;
+    if (!badgeEl) badgeEl = build();
+    if (badgeEl.parentElement !== target) target.appendChild(badgeEl);
+    badgeEl.style.display = "inline-flex";
+  }
+  function hideBadge() {
+    if (badgeEl) badgeEl.style.display = "none";
+  }
+  function removeBadge() {
+    if (badgeEl) {
+      badgeEl.remove();
+      badgeEl = null;
+    }
+    anchorEl = null;
+  }
+
   // src/presentation/content/caption-manager.js
   var captionObserver = null;
   var captionFinderObserver = null;
@@ -281,6 +352,8 @@
     if (captionObserver) captionObserver.disconnect();
     currentCaptionEl = captionEl;
     replaceCaptionText(captionEl);
+    if (currentStyle.displayMode === "original") hideBadge();
+    else showBadge(captionEl);
     captionObserver = new MutationObserver(() => {
       replaceCaptionText(captionEl);
     });
@@ -314,6 +387,7 @@
     if (captionObserver) captionObserver.disconnect();
     if (captionFinderObserver) captionFinderObserver.disconnect();
     currentCaptionEl = null;
+    removeBadge();
   }
 
   // src/presentation/content/transcript-manager.js
@@ -511,12 +585,12 @@
     const cueItems = collectCues(panel);
     if (cueItems.length === 0) return { count: 0 };
     const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG]);
-    const lang = stored[STORAGE_KEYS.TARGET_LANG] || "\uD55C\uAD6D\uC5B4";
+    const lang2 = stored[STORAGE_KEYS.TARGET_LANG] || "\uD55C\uAD6D\uC5B4";
     const ctx = getLectureContext();
     const texts = cueItems.map(({ text }) => text);
     await chrome.runtime.sendMessage({
       type: "CLEAR_LECTURE_CACHE",
-      lang,
+      lang: lang2,
       course: ctx.course,
       lecture: ctx.lecture,
       section: ctx.section
@@ -580,12 +654,16 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes[STORAGE_KEYS.ENABLED]) {
+      setBadgeEnabled(changes[STORAGE_KEYS.ENABLED].newValue);
       if (changes[STORAGE_KEYS.ENABLED].newValue === false) {
         removeAllTranslations();
         return;
       }
       const panel = document.querySelector(SELECTORS.panel);
       if (panel) scheduleTranslation(panel);
+    }
+    if (changes[STORAGE_KEYS.TARGET_LANG]) {
+      setBadgeLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
     }
     const hasStyleChange = Object.keys(changes).some((k) => STYLE_CHANGE_KEYS.has(k));
     if (hasStyleChange) {
@@ -606,9 +684,12 @@
   });
   setupNavigationHandler();
   console.log("[UdemyTranslator] content script loaded");
-  loadStyle().then(() => {
+  loadStyle().then(async () => {
     console.log("[UdemyTranslator] style loaded, initializing...");
     updateDynamicStyles();
+    const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG]);
+    setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
+    setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);
     initVttBridge();
     initPanelFinder();
     initCaptionFinder();

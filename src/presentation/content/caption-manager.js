@@ -1,6 +1,7 @@
 import { SELECTORS, CAPTION_SELECTOR } from '../../domain/constants.js';
 import { currentStyle } from './style-manager.js';
 import { getVttTranslation } from './vtt-bridge.js';
+import { showBadge, hideBadge, removeBadge } from './badge-manager.js';
 
 let captionObserver = null;
 let captionFinderObserver = null;
@@ -62,6 +63,10 @@ function observeCaption(captionEl) {
 
   replaceCaptionText(captionEl);
 
+  // "번역 중" 배지: 번역 모드에서 캡션이 보일 때 표시 (original 모드는 숨김)
+  if (currentStyle.displayMode === 'original') hideBadge();
+  else showBadge(captionEl);
+
   captionObserver = new MutationObserver(() => {
     replaceCaptionText(captionEl);
   });
@@ -105,4 +110,5 @@ export function cleanup() {
   if (captionObserver) captionObserver.disconnect();
   if (captionFinderObserver) captionFinderObserver.disconnect();
   currentCaptionEl = null;
+  removeBadge();
 }

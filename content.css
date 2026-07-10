@@ -2,8 +2,43 @@
   display: block;
   margin-top: 4px;
   padding: 2px 0;
+  font-family: "Pretendard", system-ui, -apple-system, sans-serif;
   font-size: 13px;
   line-height: 1.4;
   color: #1a1a1a;
   font-weight: 500;
 }
+
+/* ===== "번역 중" 배지 (비디오 오버레이, 시안 SS2) ===== */
+.udemy-translator-badge {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 2147483000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(139, 61, 245, 0.22);
+  border: 1px solid rgba(178, 107, 255, 0.5);
+  backdrop-filter: blur(4px);
+  font-family: "Pretendard", system-ui, -apple-system, sans-serif;
+  pointer-events: none;
+}
+.udemy-translator-badge svg { width: 16px; height: 16px; display: block; }
+.udemy-translator-badge .utb-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+.udemy-translator-badge .utb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3DF5C8;
+  box-shadow: 0 0 8px #3DF5C8;
+  animation: utb-pulse 1.8s infinite;
+}
+@keyframes utb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }

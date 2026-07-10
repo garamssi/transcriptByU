@@ -37,6 +37,23 @@ export async function loadStyle() {
   currentStyle.displayMode = stored[STORAGE_KEYS.DISPLAY_MODE] ?? 'translation';
 }
 
+// 오버레이용 로컬 폰트(@font-face). CSP상 CDN 불가 → 확장 번들 fonts/*.woff2 를
+// web_accessible_resources 로 노출한 뒤 getURL 로 주입한다. 파일이 없으면 시스템 폰트로 폴백.
+const OVERLAY_FONTS = [
+  [400, 'Pretendard-Regular.woff2'],
+  [500, 'Pretendard-Medium.woff2'],
+  [600, 'Pretendard-SemiBold.woff2'],
+  [700, 'Pretendard-Bold.woff2'],
+];
+
+function buildFontFaces() {
+  if (typeof chrome === 'undefined' || !chrome.runtime?.getURL) return '';
+  return OVERLAY_FONTS.map(([w, file]) =>
+    `@font-face{font-family:"Pretendard";font-weight:${w};font-display:swap;` +
+    `src:url("${chrome.runtime.getURL('fonts/' + file)}") format("woff2");}`
+  ).join('\n');
+}
+
 /**
  * 동적 스타일시트를 생성/갱신한다.
  */
@@ -49,21 +66,27 @@ export function updateDynamicStyles() {
   }
 
   const bgCaption = currentStyle.bgEnabled
-    ? `background-color: ${hexToRgba(currentStyle.bgColor, currentStyle.bgOpacity)} !important; padding: 4px 10px !important; border-radius: 4px !important;`
+    ? `background-color: ${hexToRgba(currentStyle.bgColor, currentStyle.bgOpacity)} !important;`
     : '';
 
   styleEl.textContent = `
+    ${buildFontFaces()}
     /* 번역된 cue-text 스타일 (트랜스크립트 패널).
        글자 크기는 유데미 기본값 유지 (슬라이더는 비디오 캡션에만 적용).
        글자색은 기본적으로 유데미 기본색 사용, 사용자가 켰을 때만 오버라이드 */
     ${SELECTORS.cueText}[data-original] {
       ${currentStyle.panelColorEnabled ? `color: ${currentStyle.panelColor} !important;` : ''}
     }
-    /* 비디오 캡션 스타일 — 어두운 배경 + 밝은 글씨 */
+    /* 비디오 번역 캡션 — 어두운 배경 + 밝은 글씨 + 좌측 보라 액센트 바 (시안 SS2) */
     ${CAPTION_SELECTOR} {
+      font-family: "Pretendard", system-ui, -apple-system, sans-serif !important;
       font-size: ${currentStyle.fontSize * 1.5}px !important;
+      font-weight: 600 !important;
       color: ${currentStyle.fontColor} !important;
       opacity: 1 !important;
+      padding: 7px 18px !important;
+      border-radius: 6px !important;
+      border-left: 3px solid #B26BFF !important;
       ${bgCaption}
     }
     /* 원본 텍스트 (트랜스크립트 패널 both 모드에서 번역 아래 보조 표시).
@@ -81,11 +104,17 @@ export function updateDynamicStyles() {
     .${ORIGINAL_CLASS}.error {
       color: #e74c3c !important;
     }
-    /* 캡션 both 모드: 원본 텍스트 (번역 아래 작게 표시) */
+    /* 캡션 both 모드: 원본 자막 — 작은 어두운 pill (시안 SS2) */
     .caption-original {
-      font-size: ${Math.round(currentStyle.fontSize * 1.1)}px !important;
-      color: rgba(255, 255, 255, 0.6) !important;
-      margin-top: 4px;
+      font-family: "Pretendard", system-ui, -apple-system, sans-serif !important;
+      display: inline-block;
+      font-size: ${Math.round(currentStyle.fontSize * 1.3)}px !important;
+      font-weight: 400 !important;
+      color: rgba(255, 255, 255, 0.72) !important;
+      background: rgba(0, 0, 0, 0.72) !important;
+      padding: 5px 14px !important;
+      border-radius: 6px !important;
+      margin-top: 8px;
     }
   `;
 }
