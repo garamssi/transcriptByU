@@ -33,8 +33,15 @@
     }
   });
 
+  // Udemy 자막 VTT 판별. 자막은 CDN 서브도메인이 다양하다(vtt-c / mp4-cdnNN 등)므로
+  // udemycdn.com 전반을 매칭하되, 스크럽 썸네일용 sprite VTT(thumb-sprites.vtt 등,
+  // Content-Type 은 text/vtt 지만 내용은 이미지 좌표)는 제외한다. 내용 기반 최종 판별은
+  // 브릿지(parseVtt 후)에서 한 번 더 한다.
   function isVttUrl(url) {
-    return typeof url === 'string' && /\.vtt(\?|$)/i.test(url) && url.includes('vtt-c.udemycdn.com');
+    return typeof url === 'string'
+      && /\.vtt(\?|$)/i.test(url)
+      && /udemycdn\.com/i.test(url)
+      && !/sprite/i.test(url);
   }
 
   // === fetch 래핑 ===

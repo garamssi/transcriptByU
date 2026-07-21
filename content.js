@@ -294,6 +294,11 @@
     }
     return bucket;
   }
+  function looksLikeSubtitles(cues) {
+    if (cues.length === 0) return false;
+    const imageLike = cues.filter((c) => /#xywh=|\.(jpe?g|png|webp)(\?|#|$)/i.test(c.text)).length;
+    return imageLike / cues.length < 0.5;
+  }
   function initVttBridge() {
     window.addEventListener("message", async (event) => {
       if (event.source !== window) return;
@@ -306,6 +311,10 @@
         const cues = parseVtt(vttText);
         if (cues.length === 0) {
           console.warn("[UdemyTranslator:VTT] no cues parsed");
+          return;
+        }
+        if (!looksLikeSubtitles(cues)) {
+          console.log(`[UdemyTranslator:VTT] skipped non-subtitle VTT (thumbnail/sprite): ${url.substring(0, 80)}`);
           return;
         }
         const uniqueTexts = [...new Set(cues.map((c) => c.text))];
