@@ -84,6 +84,13 @@ function observeCaption(captionEl) {
   });
 }
 
+// VTT 번역이 준비되면(네트워크 캡처 완료) 현재 표시 중인 캡션을 즉시 다시 칠한다.
+// 패널이 닫혀 있으면 transcript-manager 의 vtt-translations-ready 핸들러는 currentPanel
+// 가드로 아무 것도 하지 않으므로, 영상 자막은 여기서 직접 갱신해야 다음 큐를 기다리지 않는다.
+document.addEventListener('vtt-translations-ready', () => {
+  if (currentCaptionEl) replaceCaptionText(currentCaptionEl);
+});
+
 // === 캡션 요소 동적 감시 ===
 export function initCaptionFinder() {
   if (captionFinderObserver) captionFinderObserver.disconnect();

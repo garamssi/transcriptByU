@@ -264,11 +264,6 @@
     }
   };
 
-  // src/domain/cache-key.js
-  function lectureCacheKey(targetLang, course, section, lecture) {
-    return `${targetLang}::${course || ""}||${section || ""}||${lecture || ""}`;
-  }
-
   // src/presentation/content/vtt-bridge.js
   var buckets = new LRUCache();
   var processedUrls = /* @__PURE__ */ new Set();
@@ -280,11 +275,10 @@
   function getActiveLang() {
     return currentLang;
   }
-  function bucketKey(ctx) {
-    return lectureCacheKey(currentLang, ctx.course, ctx.section, ctx.lecture);
-  }
   function currentLectureKey() {
-    return bucketKey(getLectureContext());
+    const m = location.pathname.match(/\/course\/([^/]+)\/learn\/lecture\/(\d+)/);
+    const id = m ? `${m[1]}/${m[2]}` : location.pathname;
+    return `${currentLang}::${id}`;
   }
   function getOrCreateBucket(key) {
     let bucket = buckets.get(key);
@@ -333,7 +327,7 @@
     const { targetLang } = await chrome.storage.local.get("targetLang");
     if (targetLang) currentLang = targetLang;
     const ctx = getLectureContext();
-    const key = bucketKey(ctx);
+    const key = currentLectureKey();
     const marker = (t) => `${key}\0${t}`;
     const toSend = uniqueTexts.filter((t) => !inFlight.has(marker(t)));
     if (toSend.length === 0) return 0;
@@ -488,6 +482,9 @@
       subtree: true
     });
   }
+  document.addEventListener("vtt-translations-ready", () => {
+    if (currentCaptionEl) replaceCaptionText(currentCaptionEl);
+  });
   function initCaptionFinder() {
     if (captionFinderObserver) captionFinderObserver.disconnect();
     currentCaptionEl = null;
