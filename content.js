@@ -231,6 +231,7 @@
   // src/presentation/content/vtt-bridge.js
   var buckets = new LRUCache();
   var processedUrls = /* @__PURE__ */ new Set();
+  var inFlight = /* @__PURE__ */ new Set();
   var vttPending = false;
   var currentLang = DEFAULT_TARGET_LANG;
   function setActiveLang(lang2) {
@@ -284,13 +285,22 @@
     if (targetLang) currentLang = targetLang;
     const ctx = getLectureContext();
     const key = bucketKey(ctx);
-    const response = await chrome.runtime.sendMessage({
-      type: "TRANSLATE_BATCH",
-      texts: uniqueTexts,
-      course: ctx.course,
-      lecture: ctx.lecture,
-      section: ctx.section
-    });
+    const marker = (t) => `${key}\0${t}`;
+    const toSend = uniqueTexts.filter((t) => !inFlight.has(marker(t)));
+    if (toSend.length === 0) return 0;
+    toSend.forEach((t) => inFlight.add(marker(t)));
+    let response;
+    try {
+      response = await chrome.runtime.sendMessage({
+        type: "TRANSLATE_BATCH",
+        texts: toSend,
+        course: ctx.course,
+        lecture: ctx.lecture,
+        section: ctx.section
+      });
+    } finally {
+      toSend.forEach((t) => inFlight.delete(marker(t)));
+    }
     if (response?.error) {
       console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
       return 0;
@@ -299,14 +309,14 @@
     const bucket = getOrCreateBucket(key);
     let cachedCount = 0;
     let freshCount = 0;
-    for (let i = 0; i < uniqueTexts.length; i++) {
+    for (let i = 0; i < toSend.length; i++) {
       if (results[i]?.translation) {
-        bucket.set(uniqueTexts[i], results[i].translation);
+        bucket.set(toSend[i], results[i].translation);
         if (results[i].cached) cachedCount++;
         else freshCount++;
       }
     }
-    console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${uniqueTexts.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
+    console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${toSend.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
     return freshCount + cachedCount;
   }
   function getVttTranslation(text, key = currentLectureKey()) {
