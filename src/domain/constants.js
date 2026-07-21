@@ -4,8 +4,10 @@ export const STORAGE_KEYS = {
   CLAUDE_API_KEY: 'claudeApiKey',
   GEMINI_API_KEY: 'geminiApiKey',
   CLAUDE_CODE_URL: 'claudeCodeUrl',
-  API_KEY: 'apiKey', // legacy
-  MODEL: 'model', // legacy
+  // legacy: 단일 프로바이더 시절 키. 아직 마이그레이션/폴백에서 읽힘(settings-controller,
+  // storage-adapter) — 제거하면 업그레이드 전 사용자의 저장된 키/모델이 유실된다.
+  API_KEY: 'apiKey',
+  MODEL: 'model',
   CLAUDE_MODEL: 'claudeModel',
   GEMINI_MODEL: 'geminiModel',
   CLAUDE_CODE_MODEL: 'claudeCodeModel',

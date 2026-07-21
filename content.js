@@ -5,10 +5,10 @@
     CLAUDE_API_KEY: "claudeApiKey",
     GEMINI_API_KEY: "geminiApiKey",
     CLAUDE_CODE_URL: "claudeCodeUrl",
+    // legacy: 단일 프로바이더 시절 키. 아직 마이그레이션/폴백에서 읽힘(settings-controller,
+    // storage-adapter) — 제거하면 업그레이드 전 사용자의 저장된 키/모델이 유실된다.
     API_KEY: "apiKey",
-    // legacy
     MODEL: "model",
-    // legacy
     CLAUDE_MODEL: "claudeModel",
     GEMINI_MODEL: "geminiModel",
     CLAUDE_CODE_MODEL: "claudeCodeModel",
@@ -273,7 +273,6 @@
   var buckets = new LRUCache();
   var processedUrls = /* @__PURE__ */ new Set();
   var inFlight = /* @__PURE__ */ new Set();
-  var vttPending = false;
   var currentLang = DEFAULT_TARGET_LANG;
   function setActiveLang(lang2) {
     if (lang2) currentLang = lang2;
@@ -303,7 +302,6 @@
       if (processedUrls.has(url)) return;
       processedUrls.add(url);
       console.log(`[UdemyTranslator:VTT] captured: ${url}`);
-      vttPending = true;
       try {
         const cues = parseVtt(vttText);
         if (cues.length === 0) {
@@ -316,8 +314,6 @@
         document.dispatchEvent(new Event("vtt-translations-ready"));
       } catch (err) {
         console.error(`[UdemyTranslator:VTT] error: ${err.message}`);
-      } finally {
-        vttPending = false;
       }
     });
     window.postMessage({ type: "UDEMY_VTT_BRIDGE_READY" }, window.location.origin);
@@ -374,7 +370,6 @@
   }
   function clearVttStore() {
     processedUrls.clear();
-    vttPending = false;
   }
 
   // src/presentation/content/badge-manager.js

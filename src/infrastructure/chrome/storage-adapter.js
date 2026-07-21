@@ -12,7 +12,9 @@ export async function getProviderConfig() {
     'provider',
     'claudeApiKey', 'geminiApiKey', 'claudeCodeUrl',
     'claudeModel', 'geminiModel', 'claudeCodeModel',
-    'apiKey', 'model' // legacy
+    // legacy: 구버전(단일 프로바이더) 설정. 아래 claude 분기에서 claude* 값이 없을 때만
+    // 폴백으로 쓰인다 — 업그레이드 전 사용자 호환용이므로 제거 금지.
+    'apiKey', 'model'
   ]);
 
   const provider = stored.provider || 'claude-code';

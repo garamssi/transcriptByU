@@ -196,10 +196,6 @@ export async function initSettingsController($, updatePreview) {
 
       const storageKey = currentProvider === 'claude' ? STORAGE_KEYS.CLAUDE_API_KEY : STORAGE_KEYS.GEMINI_API_KEY;
       await chrome.storage.local.set({ [storageKey]: key });
-
-      if (currentProvider === 'claude') {
-        await chrome.storage.local.set({ [STORAGE_KEYS.API_KEY]: key });
-      }
     }
 
     saveKeyText.textContent = '';
