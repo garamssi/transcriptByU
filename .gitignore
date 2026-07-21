@@ -8,3 +8,6 @@ docker/secrets/
 docs/export/Pretendard-*/
 docs/export/JetBrainsMono-*/
 docs/export/*.woff2
+
+# 빌드 산출물 (build-extension.sh 결과) — 스토어 업로드용, 커밋 안 함
+udemy-ai-translator-*.zip
