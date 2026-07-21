@@ -92,9 +92,14 @@ export class TranslationService {
           }
 
           if (Object.keys(newTranslations).length > 0) {
-            Object.assign(lectureTranslations, newTranslations);
-            this.l1Cache.set(lKey, lectureTranslations);
-            await this.l2Cache.l2Set(lKey, lectureTranslations);
+            // 동시 요청(다중 자막 트랙 등 동일 강의·상이 텍스트)이 각자 로드한 캐시 객체를
+            // 서로 덮어쓰지 않도록, 저장 직전 L1 최신본에 병합한다. get→assign→set 은
+            // await 없이 동기 실행이라 원자적이며, 나중에 저장하는 요청이 먼저 저장된 번역을
+            // 흡수하므로 lost update 가 발생하지 않는다.
+            const latest = this.l1Cache.get(lKey) || lectureTranslations;
+            Object.assign(latest, newTranslations);
+            this.l1Cache.set(lKey, latest);
+            await this.l2Cache.l2Set(lKey, latest);
           }
 
         } catch (err) {
