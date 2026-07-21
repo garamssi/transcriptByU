@@ -53,13 +53,18 @@ setupNavigationHandler();
 
 // === 시작 ===
 console.log('[UdemyTranslator] content script loaded');
+
+// VTT 브릿지는 스타일·스토리지와 무관하므로 가장 먼저 등록한다.
+// 리스너를 최대한 이르게 올려 인터셉터 메시지 유실을 줄이고, BRIDGE_READY 로
+// 이미 버퍼된 VTT 를 즉시 재전송받는다.
+initVttBridge();
+
 loadStyle().then(async () => {
   console.log('[UdemyTranslator] style loaded, initializing...');
   updateDynamicStyles();
   const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG]);
   setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
   setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);
-  initVttBridge();
   initPanelFinder();
   initCaptionFinder();
 }).catch(err => {

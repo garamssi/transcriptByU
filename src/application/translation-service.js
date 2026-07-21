@@ -2,6 +2,7 @@ import { CHUNK_SIZE, DEFAULT_TARGET_LANG } from '../domain/constants.js';
 import { buildBatchSystemPrompt } from '../domain/prompt-builder.js';
 import { parseBatchResponse } from '../domain/response-parser.js';
 import { lectureCacheKey } from '../domain/cache-key.js';
+import { isAlreadyTargetLanguage } from '../domain/language-detect.js';
 
 /**
  * 번역 유스케이스를 캡슐화하는 서비스
@@ -48,17 +49,29 @@ export class TranslationService {
         }
       }
 
-      // 2) 각 텍스트를 캐시에서 조회
+      // 2) 각 텍스트를 조회
+      //    - 이미 목표 언어면(예: 한국어 자막 → 한국어) 번역하지 않고 스킵
+      //    - 그 외에는 캐시 조회, 없으면 API 대상으로 수집
       const results = new Array(texts.length).fill(null);
       const uncachedIndices = [];
+      let skippedCount = 0;
 
       for (let i = 0; i < texts.length; i++) {
+        if (isAlreadyTargetLanguage(texts[i], targetLang)) {
+          results[i] = { skipped: true };
+          skippedCount++;
+          continue;
+        }
         const cached = lectureTranslations[texts[i]];
         if (cached) {
           results[i] = { translation: cached, cached: true };
         } else {
           uncachedIndices.push(i);
         }
+      }
+
+      if (skippedCount > 0) {
+        console.log(`[UdemyTranslator] ${skippedCount}/${texts.length} lines already in ${targetLang} — skipped`);
       }
 
       // 3) 미번역분: 중복 제거 후 API 호출

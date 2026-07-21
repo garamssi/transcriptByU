@@ -221,6 +221,7 @@
         vttPending = false;
       }
     });
+    window.postMessage({ type: "UDEMY_VTT_BRIDGE_READY" }, window.location.origin);
   }
   async function requestTranslations(texts) {
     const uniqueTexts = [...new Set(texts)].filter(Boolean);
@@ -501,18 +502,30 @@
     applyDisplayMode(container);
   }
   var isApplying = false;
+  var autoRequestedTexts = /* @__PURE__ */ new Set();
   function applyVttTranslations(panel) {
     if (isApplying) return;
     isApplying = true;
     pauseObserver();
+    let toRequest = [];
     try {
       const cueItems = collectCues(panel);
-      getUntranslatedCues(cueItems);
+      const untranslated = getUntranslatedCues(cueItems);
+      toRequest = untranslated.map(({ text }) => text).filter((text) => text && !autoRequestedTexts.has(text));
       const captionEl = document.querySelector(CAPTION_SELECTOR);
       if (captionEl) replaceCaptionText(captionEl);
     } finally {
       resumeObserver();
       isApplying = false;
+    }
+    if (toRequest.length > 0) {
+      toRequest.forEach((text) => autoRequestedTexts.add(text));
+      console.log(`[UdemyTranslator] auto-translate: requesting ${toRequest.length} cues`);
+      requestTranslations(toRequest).then((count) => {
+        if (count > 0) scheduleTranslation(panel);
+      }).catch((err) => {
+        console.error("[UdemyTranslator] auto-translate request failed:", err?.message || err);
+      });
     }
   }
   document.addEventListener("vtt-translations-ready", () => {
@@ -596,6 +609,7 @@
       section: ctx.section
     });
     forgetVttTranslations(texts);
+    autoRequestedTexts.clear();
     pauseObserver();
     for (const { textSpan } of cueItems) {
       if (textSpan.dataset.original) {
@@ -618,6 +632,7 @@
     if (panelFinderObserver) panelFinderObserver.disconnect();
     currentPanel = null;
     clearTimeout(settleTimer);
+    autoRequestedTexts.clear();
     clearCaptionCache();
   }
 
@@ -684,13 +699,13 @@
   });
   setupNavigationHandler();
   console.log("[UdemyTranslator] content script loaded");
+  initVttBridge();
   loadStyle().then(async () => {
     console.log("[UdemyTranslator] style loaded, initializing...");
     updateDynamicStyles();
     const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG]);
     setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
     setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);
-    initVttBridge();
     initPanelFinder();
     initCaptionFinder();
   }).catch((err) => {

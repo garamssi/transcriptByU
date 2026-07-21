@@ -143,20 +143,47 @@ export function applyTranslation(textSpan, container, translation) {
 
 // === VTT 번역을 DOM에 적용 ===
 let isApplying = false;
+// 자동 경로에서 이미 번역 요청한 원본 텍스트 (중복·무한 요청 방지).
+// 네비게이션(cleanup) 및 재번역 시 초기화된다.
+const autoRequestedTexts = new Set();
+
 function applyVttTranslations(panel) {
   if (isApplying) return;
   isApplying = true;
   pauseObserver();
 
+  let toRequest = [];
   try {
     const cueItems = collectCues(panel);
-    getUntranslatedCues(cueItems);
+    // 저장된 VTT 번역을 붙이고, 아직 번역 없는 큐 목록을 돌려받는다.
+    const untranslated = getUntranslatedCues(cueItems);
+
+    // 자동 경로가 스스로 번역을 요청한다.
+    // (기존에는 VTT 캡처가 채워둔 번역을 '붙이기만' 했으므로, VTT 캡처가
+    //  리스너 등록 레이스로 유실되면 자동 번역이 전혀 발사되지 않았다.
+    //  이제 패널이 발견되면 미번역 큐를 직접 요청하여 API 를 발사한다.)
+    toRequest = untranslated
+      .map(({ text }) => text)
+      .filter(text => text && !autoRequestedTexts.has(text));
 
     const captionEl = document.querySelector(CAPTION_SELECTOR);
     if (captionEl) replaceCaptionText(captionEl);
   } finally {
     resumeObserver();
     isApplying = false;
+  }
+
+  if (toRequest.length > 0) {
+    toRequest.forEach(text => autoRequestedTexts.add(text));
+    console.log(`[UdemyTranslator] auto-translate: requesting ${toRequest.length} cues`);
+    requestTranslations(toRequest)
+      .then(count => {
+        // 새 번역이 저장됐으면 재스캔하여 DOM 에 반영한다.
+        if (count > 0) scheduleTranslation(panel);
+      })
+      .catch(err => {
+        console.error('[UdemyTranslator] auto-translate request failed:', err?.message || err);
+      });
   }
 }
 
@@ -276,6 +303,8 @@ export async function retranslateAll() {
   //    이 단계 없이는 applyVttTranslations 가 오래된 메모리 번역을 다시 붙여
   //    캐시만 지워지고 화면은 그대로인 문제가 발생한다.
   forgetVttTranslations(texts);
+  // 자동 요청 기록도 비워 강제 재번역이 API 를 새로 호출하게 한다.
+  autoRequestedTexts.clear();
 
   pauseObserver();
   for (const { textSpan } of cueItems) {
@@ -304,5 +333,6 @@ export function cleanup() {
   if (panelFinderObserver) panelFinderObserver.disconnect();
   currentPanel = null;
   clearTimeout(settleTimer);
+  autoRequestedTexts.clear();
   clearCaptionCache();
 }

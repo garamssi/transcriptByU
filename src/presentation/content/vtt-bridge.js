@@ -39,6 +39,10 @@ export function initVttBridge() {
       vttPending = false;
     }
   });
+
+  // 리스너 등록 완료 → 인터셉터에 '준비됨' 신호를 보내, 리스너 등록 전에
+  // 캡처돼 버퍼에 쌓인 VTT 를 재전송받는다(최초 로드 레이스 방지).
+  window.postMessage({ type: 'UDEMY_VTT_BRIDGE_READY' }, window.location.origin);
 }
 
 /**
