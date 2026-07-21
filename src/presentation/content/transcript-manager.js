@@ -1,7 +1,7 @@
 import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR, STORAGE_KEYS } from '../../domain/constants.js';
 import { currentStyle } from './style-manager.js';
 import { replaceCaptionText, updateCaptionCache, clearCaptionCache } from './caption-manager.js';
-import { getVttTranslation, requestTranslations, forgetVttTranslations } from './vtt-bridge.js';
+import { getVttTranslation, requestTranslations, forgetVttTranslations, currentLectureKey } from './vtt-bridge.js';
 
 let observer = null;
 let panelFinderObserver = null;
@@ -106,13 +106,14 @@ export function collectCues(panel) {
 
 // === 미번역 큐만 필터링 (VTT 번역 적용 포함) ===
 export function getUntranslatedCues(cueItems) {
+  const key = currentLectureKey(); // 스캔당 1회만 계산 (현재 강의 버킷)
   return cueItems.filter(({ text, textSpan, container }) => {
     if (textSpan.dataset.original) return false;
     const parent = textSpan.closest('p') || textSpan.parentElement;
     const origEl = parent.querySelector(`.${ORIGINAL_CLASS}`);
     if (origEl) return false;
 
-    const vttTranslation = getVttTranslation(text);
+    const vttTranslation = getVttTranslation(text, key);
     if (vttTranslation) {
       applyTranslation(textSpan, container, vttTranslation);
       return false;

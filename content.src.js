@@ -6,7 +6,7 @@ import {
 } from './src/presentation/content/transcript-manager.js';
 import { initCaptionFinder } from './src/presentation/content/caption-manager.js';
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
-import { initVttBridge } from './src/presentation/content/vtt-bridge.js';
+import { initVttBridge, setActiveLang } from './src/presentation/content/vtt-bridge.js';
 import { setBadgeEnabled, setBadgeLang } from './src/presentation/content/badge-manager.js';
 
 // === storage 변경 감지 → 즉시 스타일 반영 ===
@@ -24,6 +24,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 
   if (changes[STORAGE_KEYS.TARGET_LANG]) {
+    setActiveLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
     setBadgeLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
   }
 
@@ -63,6 +64,7 @@ loadStyle().then(async () => {
   console.log('[UdemyTranslator] style loaded, initializing...');
   updateDynamicStyles();
   const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG]);
+  setActiveLang(s[STORAGE_KEYS.TARGET_LANG]);
   setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
   setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);
   initPanelFinder();

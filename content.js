@@ -24,6 +24,8 @@
     STYLE_PANEL_COLOR_ENABLED: "stylePanelColorEnabled",
     STYLE_EXPANDED: "styleExpanded"
   };
+  var L1_MAX_SIZE = 50;
+  var DEFAULT_TARGET_LANG = "\uD55C\uAD6D\uC5B4";
   var SELECTORS = {
     panel: '[data-purpose="transcript-panel"]',
     cueAll: 'p[data-purpose="transcript-cue"], p[data-purpose="transcript-cue-active"]',
@@ -192,10 +194,62 @@
     return cues;
   }
 
+  // src/infrastructure/cache/lru-cache.js
+  var LRUCache = class {
+    constructor(max = L1_MAX_SIZE) {
+      this.max = max;
+      this.map = /* @__PURE__ */ new Map();
+    }
+    get(key) {
+      if (!this.map.has(key)) return void 0;
+      const val = this.map.get(key);
+      this.map.delete(key);
+      this.map.set(key, val);
+      return val;
+    }
+    set(key, val) {
+      if (this.map.has(key)) this.map.delete(key);
+      this.map.set(key, val);
+      if (this.map.size > this.max) {
+        const oldest = this.map.keys().next().value;
+        this.map.delete(oldest);
+      }
+    }
+    delete(key) {
+      this.map.delete(key);
+    }
+    clear() {
+      this.map.clear();
+    }
+  };
+
+  // src/domain/cache-key.js
+  function lectureCacheKey(targetLang, course, section, lecture) {
+    return `${targetLang}::${course || ""}||${section || ""}||${lecture || ""}`;
+  }
+
   // src/presentation/content/vtt-bridge.js
-  var vttTranslationStore = /* @__PURE__ */ new Map();
+  var buckets = new LRUCache();
   var processedUrls = /* @__PURE__ */ new Set();
   var vttPending = false;
+  var currentLang = DEFAULT_TARGET_LANG;
+  function setActiveLang(lang2) {
+    if (lang2) currentLang = lang2;
+  }
+  function bucketKey(ctx) {
+    return lectureCacheKey(currentLang, ctx.course, ctx.section, ctx.lecture);
+  }
+  function currentLectureKey() {
+    return bucketKey(getLectureContext());
+  }
+  function getOrCreateBucket(key) {
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = /* @__PURE__ */ new Map();
+      buckets.set(key, bucket);
+    }
+    return bucket;
+  }
   function initVttBridge() {
     window.addEventListener("message", async (event) => {
       if (event.source !== window) return;
@@ -226,7 +280,10 @@
   async function requestTranslations(texts) {
     const uniqueTexts = [...new Set(texts)].filter(Boolean);
     if (uniqueTexts.length === 0) return 0;
+    const { targetLang } = await chrome.storage.local.get("targetLang");
+    if (targetLang) currentLang = targetLang;
     const ctx = getLectureContext();
+    const key = bucketKey(ctx);
     const response = await chrome.runtime.sendMessage({
       type: "TRANSLATE_BATCH",
       texts: uniqueTexts,
@@ -239,11 +296,12 @@
       return 0;
     }
     const results = response?.results || [];
+    const bucket = getOrCreateBucket(key);
     let cachedCount = 0;
     let freshCount = 0;
     for (let i = 0; i < uniqueTexts.length; i++) {
       if (results[i]?.translation) {
-        vttTranslationStore.set(uniqueTexts[i], results[i].translation);
+        bucket.set(uniqueTexts[i], results[i].translation);
         if (results[i].cached) cachedCount++;
         else freshCount++;
       }
@@ -251,14 +309,16 @@
     console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${uniqueTexts.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
     return freshCount + cachedCount;
   }
-  function getVttTranslation(text) {
-    return vttTranslationStore.get(text) || null;
+  function getVttTranslation(text, key = currentLectureKey()) {
+    const bucket = buckets.get(key);
+    return bucket && bucket.get(text) || null;
   }
-  function forgetVttTranslations(texts) {
-    for (const text of texts) vttTranslationStore.delete(text);
+  function forgetVttTranslations(texts, key = currentLectureKey()) {
+    const bucket = buckets.get(key);
+    if (!bucket) return;
+    for (const text of texts) bucket.delete(text);
   }
   function clearVttStore() {
-    vttTranslationStore.clear();
     processedUrls.clear();
     vttPending = false;
   }
@@ -475,12 +535,13 @@
     return items;
   }
   function getUntranslatedCues(cueItems) {
+    const key = currentLectureKey();
     return cueItems.filter(({ text, textSpan, container }) => {
       if (textSpan.dataset.original) return false;
       const parent = textSpan.closest("p") || textSpan.parentElement;
       const origEl = parent.querySelector(`.${ORIGINAL_CLASS}`);
       if (origEl) return false;
-      const vttTranslation = getVttTranslation(text);
+      const vttTranslation = getVttTranslation(text, key);
       if (vttTranslation) {
         applyTranslation(textSpan, container, vttTranslation);
         return false;
@@ -678,6 +739,7 @@
       if (panel) scheduleTranslation(panel);
     }
     if (changes[STORAGE_KEYS.TARGET_LANG]) {
+      setActiveLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
       setBadgeLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
     }
     const hasStyleChange = Object.keys(changes).some((k) => STYLE_CHANGE_KEYS.has(k));
@@ -704,6 +766,7 @@
     console.log("[UdemyTranslator] style loaded, initializing...");
     updateDynamicStyles();
     const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG]);
+    setActiveLang(s[STORAGE_KEYS.TARGET_LANG]);
     setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
     setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);
     initPanelFinder();
