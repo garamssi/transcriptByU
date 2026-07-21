@@ -1,6 +1,7 @@
 import { SELECTORS, CAPTION_SELECTOR } from '../../domain/constants.js';
+import { isAlreadyTargetLanguage } from '../../domain/language-detect.js';
 import { currentStyle } from './style-manager.js';
-import { getVttTranslation } from './vtt-bridge.js';
+import { getVttTranslation, getActiveLang } from './vtt-bridge.js';
 import { showBadge, hideBadge, removeBadge } from './badge-manager.js';
 
 let captionObserver = null;
@@ -21,7 +22,7 @@ export function clearCaptionCache() {
 // === 캡션 텍스트를 번역으로 치환 ===
 export function replaceCaptionText(captionEl) {
   if (!captionEl) return;
-  if (currentStyle.displayMode === 'original') return;
+  if (currentStyle.displayMode === 'original') { hideBadge(); return; }
 
   const subSpan = captionEl.querySelector('.caption-original');
   const originalText = subSpan
@@ -30,7 +31,15 @@ export function replaceCaptionText(captionEl) {
   if (!originalText) return;
 
   const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
-  if (!translated) return;
+  if (!translated) {
+    // 번역 없음: 원본이 이미 목표 언어면(백그라운드 스킵 대상, 예: 한국어 자막 → 한국어)
+    // '번역 중' 배지를 숨기고, 아직 번역 전인 외국어면 배지를 표시한 채 원본을 유지한다.
+    if (isAlreadyTargetLanguage(originalText, getActiveLang())) hideBadge();
+    else showBadge(captionEl);
+    return;
+  }
+
+  showBadge(captionEl);
 
   // observer를 일시 중지하여 자기 트리거 루프 방지
   if (captionObserver) captionObserver.disconnect();
@@ -61,11 +70,8 @@ function observeCaption(captionEl) {
   if (captionObserver) captionObserver.disconnect();
   currentCaptionEl = captionEl;
 
+  // 배지 표시/숨김은 replaceCaptionText 가 일원 관리 (번역 모드·번역 유무·같은 언어 반영)
   replaceCaptionText(captionEl);
-
-  // "번역 중" 배지: 번역 모드에서 캡션이 보일 때 표시 (original 모드는 숨김)
-  if (currentStyle.displayMode === 'original') hideBadge();
-  else showBadge(captionEl);
 
   captionObserver = new MutationObserver(() => {
     replaceCaptionText(captionEl);

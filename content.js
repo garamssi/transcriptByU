@@ -160,6 +160,47 @@
   `;
   }
 
+  // src/domain/language-detect.js
+  var TARGET_SCRIPT = {
+    "\uD55C\uAD6D\uC5B4": "hangul",
+    "\u65E5\u672C\u8A9E": "japanese",
+    "\u4E2D\u6587": "chinese"
+  };
+  var RE_HANGUL = /\p{Script=Hangul}/u;
+  var RE_KANA = /\p{Script=Hiragana}|\p{Script=Katakana}/u;
+  var RE_HAN = /\p{Script=Han}/u;
+  var RE_LATIN = /[A-Za-z]/;
+  function dominantScript(text) {
+    let hangul = 0, kana = 0, han = 0, latin = 0, total = 0;
+    for (const ch of text) {
+      if (RE_HANGUL.test(ch)) {
+        hangul++;
+        total++;
+      } else if (RE_KANA.test(ch)) {
+        kana++;
+        total++;
+      } else if (RE_HAN.test(ch)) {
+        han++;
+        total++;
+      } else if (RE_LATIN.test(ch)) {
+        latin++;
+        total++;
+      }
+    }
+    if (total === 0) return "none";
+    if (kana > 0) return "japanese";
+    if (hangul / total >= 0.5) return "hangul";
+    if (han / total >= 0.5) return "chinese";
+    if (latin / total >= 0.5) return "latin";
+    return "mixed";
+  }
+  function isAlreadyTargetLanguage(text, targetLang) {
+    if (!text) return false;
+    const expected = TARGET_SCRIPT[targetLang];
+    if (!expected) return false;
+    return dominantScript(text) === expected;
+  }
+
   // src/infrastructure/vtt/vtt-parser.js
   var _decoder = document.createElement("textarea");
   function decodeHtmlEntities(str) {
@@ -236,6 +277,9 @@
   var currentLang = DEFAULT_TARGET_LANG;
   function setActiveLang(lang2) {
     if (lang2) currentLang = lang2;
+  }
+  function getActiveLang() {
+    return currentLang;
   }
   function bucketKey(ctx) {
     return lectureCacheKey(currentLang, ctx.course, ctx.section, ctx.lecture);
@@ -393,12 +437,20 @@
   }
   function replaceCaptionText(captionEl) {
     if (!captionEl) return;
-    if (currentStyle.displayMode === "original") return;
+    if (currentStyle.displayMode === "original") {
+      hideBadge();
+      return;
+    }
     const subSpan = captionEl.querySelector(".caption-original");
     const originalText = subSpan ? captionEl.childNodes[0]?.textContent?.trim() || captionEl.textContent.trim() : captionEl.textContent.trim();
     if (!originalText) return;
     const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
-    if (!translated) return;
+    if (!translated) {
+      if (isAlreadyTargetLanguage(originalText, getActiveLang())) hideBadge();
+      else showBadge(captionEl);
+      return;
+    }
+    showBadge(captionEl);
     if (captionObserver) captionObserver.disconnect();
     if (currentStyle.displayMode === "both") {
       captionEl.innerHTML = "";
@@ -423,8 +475,6 @@
     if (captionObserver) captionObserver.disconnect();
     currentCaptionEl = captionEl;
     replaceCaptionText(captionEl);
-    if (currentStyle.displayMode === "original") hideBadge();
-    else showBadge(captionEl);
     captionObserver = new MutationObserver(() => {
       replaceCaptionText(captionEl);
     });
