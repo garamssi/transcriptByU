@@ -22,6 +22,7 @@ export const STORAGE_KEYS = {
   STYLE_PANEL_COLOR: 'stylePanelColor',
   STYLE_PANEL_COLOR_ENABLED: 'stylePanelColorEnabled',
   STYLE_EXPANDED: 'styleExpanded',
+  UI_LANG: 'uiLang',
 };
 
 // === Cache ===
@@ -66,18 +67,18 @@ export const STYLE_DEFAULTS = {
 // === Model Options ===
 export const MODELS = {
   claude: [
-    { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 (빠름/저렴)' },
-    { value: 'claude-sonnet-5', label: 'Sonnet 5 (균형)' },
-    { value: 'claude-opus-4-8', label: 'Opus 4.8 (고품질)' },
+    { value: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', tier: 'fastCheap' },
+    { value: 'claude-sonnet-5', name: 'Sonnet 5', tier: 'balanced' },
+    { value: 'claude-opus-4-8', name: 'Opus 4.8', tier: 'highQuality' },
   ],
   gemini: [
-    { value: 'gemini-3.1-flash-lite', label: 'Flash-Lite 3.1 (빠름/저렴)' },
-    { value: 'gemini-3.5-flash', label: 'Flash 3.5 (권장)' },
-    { value: 'gemini-3.1-pro', label: '3.1 Pro (고품질)' },
+    { value: 'gemini-3.1-flash-lite', name: 'Flash-Lite 3.1', tier: 'fastCheap' },
+    { value: 'gemini-3.5-flash', name: 'Flash 3.5', tier: 'recommended' },
+    { value: 'gemini-3.1-pro', name: '3.1 Pro', tier: 'highQuality' },
   ],
   'claude-code': [
-    { value: 'claude-sonnet-5', label: 'Sonnet 5 (빠름)' },
-    { value: 'claude-opus-4-8', label: 'Opus 4.8 (고품질)' },
+    { value: 'claude-sonnet-5', name: 'Sonnet 5', tier: 'fast' },
+    { value: 'claude-opus-4-8', name: 'Opus 4.8', tier: 'highQuality' },
   ],
 };
 
