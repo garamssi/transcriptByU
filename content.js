@@ -343,7 +343,7 @@
     currentLang = targetCode;
     const ctx = getLectureContext();
     const key = currentLectureKey();
-    const marker = (t2) => `${key}\0${t2}`;
+    const marker = (t2) => `${key} ${t2}`;
     const toSend = uniqueTexts.filter((t2) => !inFlight.has(marker(t2)));
     if (toSend.length === 0) return 0;
     toSend.forEach((t2) => inFlight.add(marker(t2)));
