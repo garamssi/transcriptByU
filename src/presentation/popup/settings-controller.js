@@ -1,6 +1,7 @@
 import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS } from '../../domain/constants.js';
 import { checkClaudeCodeConnection } from '../../infrastructure/api/claude-code-client.js';
 import { t, applyI18n, setLocale, getLocale } from '../../shared/i18n.js';
+import { LANGUAGES, TARGET_CODES, UI_CODES, resolveCode } from '../../domain/languages.js';
 
 /**
  * 설정 UI를 초기화한다.
@@ -69,7 +70,12 @@ export async function initSettingsController($, updatePreview) {
   claudeCodeUrlInput.value = stored[STORAGE_KEYS.CLAUDE_CODE_URL] || 'http://localhost:3456';
   enableToggle.checked = stored[STORAGE_KEYS.ENABLED] !== false;
   updateEnableLabel();
-  if (stored[STORAGE_KEYS.TARGET_LANG]) targetLangSelect.value = stored[STORAGE_KEYS.TARGET_LANG];
+  targetLangSelect.innerHTML = TARGET_CODES.map(c => `<option value="${c}">${LANGUAGES[c].endonym}</option>`).join('');
+  const targetCode = resolveCode(stored[STORAGE_KEYS.TARGET_LANG]);
+  targetLangSelect.value = targetCode;
+  if (stored[STORAGE_KEYS.TARGET_LANG] !== targetCode) {
+    await chrome.storage.local.set({ [STORAGE_KEYS.TARGET_LANG]: targetCode }); // 레거시 엔도님 → 코드 정규화
+  }
   if (stored[STORAGE_KEYS.DISPLAY_MODE]) displayModeSelect.value = stored[STORAGE_KEYS.DISPLAY_MODE];
 
   // provider UI 초기화
@@ -238,6 +244,7 @@ export async function initSettingsController($, updatePreview) {
 
   // 화면 언어(UI locale) 셀렉트
   const uiLangSelect = $('uiLang');
+  uiLangSelect.innerHTML = UI_CODES.map(c => `<option value="${c}">${LANGUAGES[c].endonym}</option>`).join('');
   uiLangSelect.value = getLocale(); // popup.js가 이미 setLocale 완료
   uiLangSelect.addEventListener('change', async () => {
     setLocale(uiLangSelect.value);

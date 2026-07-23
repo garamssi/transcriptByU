@@ -1,5 +1,6 @@
 import { escapeHtml } from '../../shared/utils.js';
 import { t } from '../../shared/i18n.js';
+import { byCode } from '../../domain/languages.js';
 
 /**
  * 캐시 관리 다이얼로그를 초기화한다.
@@ -151,7 +152,7 @@ export function initCacheDialog({
           <div class="cache-item-path">${highlight(path, query)}</div>
           <div class="cache-item-meta">
             <span class="cache-item-tag">${t('cache.subtitleCount', { count: item.count })}</span>
-            <span class="cache-item-tag">${escapeHtml(item.lang)}</span>
+            <span class="cache-item-tag">${escapeHtml(byCode(item.lang)?.endonym || item.lang)}</span>
           </div>
         </div>
         <button class="cache-item-del" data-key="${attr(item.key)}" title="${t('cache.delLesson')}">${trashSvg}</button>
@@ -201,7 +202,7 @@ export function initCacheDialog({
           <div class="cache-item-lecture">${escapeHtml(title)}</div>
           <div class="cache-item-meta">
             <span class="cache-item-tag">${t('cache.subtitleCount', { count: item.count })}</span>
-            <span class="cache-item-tag">${escapeHtml(item.lang)}</span>
+            <span class="cache-item-tag">${escapeHtml(byCode(item.lang)?.endonym || item.lang)}</span>
           </div>
         </div>
         <button class="cache-item-del" data-key="${attr(item.key)}" title="${t('cache.delLesson')}">${trashSvg}</button>
