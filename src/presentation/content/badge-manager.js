@@ -3,6 +3,8 @@
  * 캡션 오버레이가 나타날 때 표시하고, 비활성/네비게이션 시 정리한다.
  */
 
+import { t } from '../../shared/i18n.js';
+
 const MARK_SVG =
   '<svg viewBox="0 0 100 100" aria-hidden="true">' +
   '<rect x="4" y="4" width="92" height="92" rx="26" fill="#8B3DF5"/>' +
@@ -16,11 +18,19 @@ let anchorEl = null;
 let lang = '한국어';
 let enabled = true;
 
+function badgeText() {
+  const nameKey = 'langNames.' + lang;
+  const name = t(nameKey);
+  // t()가 키를 그대로 돌려주면(미매핑) 원본 엔도님 사용
+  const display = name === nameKey ? lang : name;
+  return t('badge.translatingTo', { lang: display });
+}
+
 function build() {
   const el = document.createElement('div');
   el.className = 'udemy-translator-badge';
   el.innerHTML = `${MARK_SVG}<span class="utb-text"></span><span class="utb-dot"></span>`;
-  el.querySelector('.utb-text').textContent = `${lang} 번역 중`;
+  el.querySelector('.utb-text').textContent = badgeText();
   return el;
 }
 
@@ -32,8 +42,8 @@ function mountTarget() {
 }
 
 export function setBadgeLang(l) {
-  lang = l || '한국어';
-  if (badgeEl) badgeEl.querySelector('.utb-text').textContent = `${lang} 번역 중`;
+  if (l) lang = l;
+  if (badgeEl) badgeEl.querySelector('.utb-text').textContent = badgeText();
 }
 
 export function setBadgeEnabled(v) {
