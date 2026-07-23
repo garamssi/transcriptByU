@@ -1,14 +1,17 @@
+import { byCode, DEFAULT_TARGET_CODE } from './languages.js';
+
 /**
  * 배치 번역용 시스템 프롬프트를 생성한다.
- * @param {string} targetLang - 번역 대상 언어
+ * @param {string} targetCode - 번역 대상 언어 코드 (예: 'ko')
  * @param {{ section?: string, lecture?: string }} [context] - 강의 컨텍스트
  * @returns {string} 시스템 프롬프트
  */
-export function buildBatchSystemPrompt(targetLang, context) {
-  const langMap = { '한국어': 'Korean', '日本語': 'Japanese', '中文': 'Chinese' };
-  const langEnglish = langMap[targetLang] || targetLang;
+export function buildBatchSystemPrompt(targetCode, context) {
+  const lang = byCode(targetCode) || byCode(DEFAULT_TARGET_CODE);
+  const langEnglish = lang.englishName;
+  const endonym = lang.endonym;
 
-  let prompt = `You are a subtitle translator. Translate each line to ${langEnglish} (${targetLang}).
+  let prompt = `You are a subtitle translator. Translate each line to ${langEnglish} (${endonym}).
 
 INPUT FORMAT: Each line is "N|original text"
 OUTPUT FORMAT: Each line must be "N|translated text"

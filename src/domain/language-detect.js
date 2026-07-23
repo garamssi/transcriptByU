@@ -4,16 +4,11 @@
  * 목표 언어와 자막 언어가 같으면(예: 한국어 자막 → 한국어 번역) 번역을 건너뛰기 위한
  * 판정. 번역 API 호출을 아끼고, 같은 언어를 굳이 재작성해 자막이 어색해지는 것을 막는다.
  *
- * 지원 목표 언어: 한국어 / 日本語 / 中文 (popup 의 targetLang 옵션과 일치).
+ * 지원 목표 언어: languages.js 레지스트리에 등록된 코드(en/ko/ja/zh).
  * 그 외(미지원) 목표 언어는 항상 번역 대상으로 본다.
  */
 
-// 목표 언어 → 기대되는 대표 스크립트 카테고리
-const TARGET_SCRIPT = {
-  '한국어': 'hangul',
-  '日本語': 'japanese',
-  '中文': 'chinese',
-};
+import { scriptOf } from './languages.js';
 
 const RE_HANGUL = /\p{Script=Hangul}/u;
 const RE_KANA = /\p{Script=Hiragana}|\p{Script=Katakana}/u;
@@ -48,12 +43,14 @@ export function dominantScript(text) {
 /**
  * 텍스트가 이미 목표 언어로 되어 있는지 여부.
  * @param {string} text - 원본(자막) 텍스트
- * @param {string} targetLang - 번역 목표 언어 (예: '한국어')
+ * @param {string} targetCode - 번역 목표 언어 코드 (예: 'ko')
+ * @param {string} [sourceCode] - 원본(자막) 언어 코드 (알려진 경우)
  * @returns {boolean} 같은 언어라 번역이 불필요하면 true
  */
-export function isAlreadyTargetLanguage(text, targetLang) {
+export function isAlreadyTargetLanguage(text, targetCode, sourceCode) {
   if (!text) return false;
-  const expected = TARGET_SCRIPT[targetLang];
-  if (!expected) return false; // 미지원 목표 언어 → 항상 번역
+  if (sourceCode && sourceCode === targetCode) return true; // 원본 코드가 알려졌고 목표와 같으면 정확 스킵
+  const expected = scriptOf(targetCode);
+  if (!expected) return false; // 미지원 코드 → 항상 번역
   return dominantScript(text) === expected;
 }
