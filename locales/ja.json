@@ -29,7 +29,7 @@
   },
   "displayModeOptions": {
     "translation": "翻訳のみ",
-    "both": "原文 + 翻訳（同時表示）",
+    "both": "原文 + 翻訳(同時表示)",
     "original": "原文のみ"
   },
   "style": {

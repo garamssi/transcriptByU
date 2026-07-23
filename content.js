@@ -1027,7 +1027,7 @@
     },
     displayModeOptions: {
       translation: "\u7FFB\u8A33\u306E\u307F",
-      both: "\u539F\u6587 + \u7FFB\u8A33\uFF08\u540C\u6642\u8868\u793A\uFF09",
+      both: "\u539F\u6587 + \u7FFB\u8A33(\u540C\u6642\u8868\u793A)",
       original: "\u539F\u6587\u306E\u307F"
     },
     style: {
