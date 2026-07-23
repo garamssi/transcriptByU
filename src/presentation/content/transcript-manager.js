@@ -1,4 +1,5 @@
 import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR, STORAGE_KEYS } from '../../domain/constants.js';
+import { resolveCode } from '../../domain/languages.js';
 import { currentStyle } from './style-manager.js';
 import { replaceCaptionText, updateCaptionCache, clearCaptionCache } from './caption-manager.js';
 import { getVttTranslation, requestTranslations, forgetVttTranslations, currentLectureKey } from './vtt-bridge.js';
@@ -285,7 +286,7 @@ export async function retranslateAll() {
   if (cueItems.length === 0) return { count: 0 };
 
   const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG]);
-  const lang = stored[STORAGE_KEYS.TARGET_LANG] || '한국어';
+  const targetCode = resolveCode(stored[STORAGE_KEYS.TARGET_LANG]);
   const ctx = getLectureContext();
 
   // 재번역 대상 원본 텍스트(영문)를 DOM 원복 전에 확보한다.
@@ -294,7 +295,7 @@ export async function retranslateAll() {
   // 1) 영속 캐시(L1+L2) 삭제 → 다음 TRANSLATE_BATCH 가 API 를 새로 호출하도록 한다.
   await chrome.runtime.sendMessage({
     type: 'CLEAR_LECTURE_CACHE',
-    lang,
+    lang: targetCode,
     course: ctx.course,
     lecture: ctx.lecture,
     section: ctx.section

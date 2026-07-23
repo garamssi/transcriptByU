@@ -26,7 +26,6 @@
     UI_LANG: "uiLang"
   };
   var L1_MAX_SIZE = 50;
-  var DEFAULT_TARGET_LANG = "\uD55C\uAD6D\uC5B4";
   var SELECTORS = {
     panel: '[data-purpose="transcript-panel"]',
     cueAll: 'p[data-purpose="transcript-cue"], p[data-purpose="transcript-cue-active"]',
@@ -161,12 +160,25 @@
   `;
   }
 
-  // src/domain/language-detect.js
-  var TARGET_SCRIPT = {
-    "\uD55C\uAD6D\uC5B4": "hangul",
-    "\u65E5\u672C\u8A9E": "japanese",
-    "\u4E2D\u6587": "chinese"
+  // src/domain/languages.js
+  var LANGUAGES = {
+    en: { code: "en", endonym: "English", englishName: "English", script: "latin" },
+    ko: { code: "ko", endonym: "\uD55C\uAD6D\uC5B4", englishName: "Korean", script: "hangul" },
+    ja: { code: "ja", endonym: "\u65E5\u672C\u8A9E", englishName: "Japanese", script: "japanese" },
+    zh: { code: "zh", endonym: "\u4E2D\u6587", englishName: "Chinese", script: "chinese" }
   };
+  var DEFAULT_TARGET_CODE = "ko";
+  var ENDONYM_TO_CODE = { "English": "en", "\uD55C\uAD6D\uC5B4": "ko", "\u65E5\u672C\u8A9E": "ja", "\u4E2D\u6587": "zh" };
+  function scriptOf(code) {
+    return LANGUAGES[code]?.script || null;
+  }
+  function resolveCode(value, fallback = DEFAULT_TARGET_CODE) {
+    if (!value) return fallback;
+    if (LANGUAGES[value]) return value;
+    return ENDONYM_TO_CODE[value] || fallback;
+  }
+
+  // src/domain/language-detect.js
   var RE_HANGUL = /\p{Script=Hangul}/u;
   var RE_KANA = /\p{Script=Hiragana}|\p{Script=Katakana}/u;
   var RE_HAN = /\p{Script=Han}/u;
@@ -195,9 +207,10 @@
     if (latin / total >= 0.5) return "latin";
     return "mixed";
   }
-  function isAlreadyTargetLanguage(text, targetLang) {
+  function isAlreadyTargetLanguage(text, targetCode, sourceCode) {
     if (!text) return false;
-    const expected = TARGET_SCRIPT[targetLang];
+    if (sourceCode && sourceCode === targetCode) return true;
+    const expected = scriptOf(targetCode);
     if (!expected) return false;
     return dominantScript(text) === expected;
   }
@@ -269,7 +282,7 @@
   var buckets = new LRUCache();
   var processedUrls = /* @__PURE__ */ new Set();
   var inFlight = /* @__PURE__ */ new Set();
-  var currentLang = DEFAULT_TARGET_LANG;
+  var currentLang = DEFAULT_TARGET_CODE;
   function setActiveLang(lang2) {
     if (lang2) currentLang = lang2;
   }
@@ -326,7 +339,8 @@
     const uniqueTexts = [...new Set(texts)].filter(Boolean);
     if (uniqueTexts.length === 0) return 0;
     const { targetLang } = await chrome.storage.local.get("targetLang");
-    if (targetLang) currentLang = targetLang;
+    const targetCode = resolveCode(targetLang);
+    currentLang = targetCode;
     const ctx = getLectureContext();
     const key = currentLectureKey();
     const marker = (t2) => `${key}\0${t2}`;
@@ -338,6 +352,7 @@
       response = await chrome.runtime.sendMessage({
         type: "TRANSLATE_BATCH",
         texts: toSend,
+        targetCode,
         course: ctx.course,
         lecture: ctx.lecture,
         section: ctx.section
@@ -750,12 +765,12 @@
     const cueItems = collectCues(panel);
     if (cueItems.length === 0) return { count: 0 };
     const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG]);
-    const lang2 = stored[STORAGE_KEYS.TARGET_LANG] || "\uD55C\uAD6D\uC5B4";
+    const targetCode = resolveCode(stored[STORAGE_KEYS.TARGET_LANG]);
     const ctx = getLectureContext();
     const texts = cueItems.map(({ text }) => text);
     await chrome.runtime.sendMessage({
       type: "CLEAR_LECTURE_CACHE",
-      lang: lang2,
+      lang: targetCode,
       course: ctx.course,
       lecture: ctx.lecture,
       section: ctx.section
@@ -1098,8 +1113,9 @@
       if (panel) scheduleTranslation(panel);
     }
     if (changes[STORAGE_KEYS.TARGET_LANG]) {
-      setActiveLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
-      setBadgeLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
+      const code = resolveCode(changes[STORAGE_KEYS.TARGET_LANG].newValue);
+      setActiveLang(code);
+      setBadgeLang(code);
     }
     if (changes[STORAGE_KEYS.UI_LANG]) {
       setLocale(changes[STORAGE_KEYS.UI_LANG].newValue);
@@ -1130,8 +1146,8 @@
     updateDynamicStyles();
     const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.UI_LANG]);
     setLocale(s[STORAGE_KEYS.UI_LANG]);
-    setActiveLang(s[STORAGE_KEYS.TARGET_LANG]);
-    setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
+    setActiveLang(resolveCode(s[STORAGE_KEYS.TARGET_LANG]));
+    setBadgeLang(resolveCode(s[STORAGE_KEYS.TARGET_LANG]));
     setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);
     initPanelFinder();
     initCaptionFinder();

@@ -8,6 +8,7 @@ import { initCaptionFinder } from './src/presentation/content/caption-manager.js
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
 import { initVttBridge, setActiveLang } from './src/presentation/content/vtt-bridge.js';
 import { setBadgeEnabled, setBadgeLang } from './src/presentation/content/badge-manager.js';
+import { resolveCode } from './src/domain/languages.js';
 import en from './locales/en.json';
 import ko from './locales/ko.json';
 import ja from './locales/ja.json';
@@ -30,8 +31,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 
   if (changes[STORAGE_KEYS.TARGET_LANG]) {
-    setActiveLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
-    setBadgeLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
+    const code = resolveCode(changes[STORAGE_KEYS.TARGET_LANG].newValue);
+    setActiveLang(code);
+    setBadgeLang(code);
   }
 
   if (changes[STORAGE_KEYS.UI_LANG]) {
@@ -76,8 +78,8 @@ loadStyle().then(async () => {
   updateDynamicStyles();
   const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.UI_LANG]);
   setLocale(s[STORAGE_KEYS.UI_LANG]); // 배지 문구 생성보다 먼저 (값 없으면 'en')
-  setActiveLang(s[STORAGE_KEYS.TARGET_LANG]);
-  setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
+  setActiveLang(resolveCode(s[STORAGE_KEYS.TARGET_LANG]));
+  setBadgeLang(resolveCode(s[STORAGE_KEYS.TARGET_LANG]));
   setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);
   initPanelFinder();
   initCaptionFinder();

@@ -31,7 +31,6 @@ export const L1_MAX_SIZE = 50;
 
 // === Translation ===
 export const CHUNK_SIZE = 60;
-export const DEFAULT_TARGET_LANG = '한국어';
 
 // === DOM Selectors (Udemy) ===
 export const SELECTORS = {
