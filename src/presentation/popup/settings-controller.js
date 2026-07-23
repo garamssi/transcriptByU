@@ -1,5 +1,6 @@
 import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS } from '../../domain/constants.js';
 import { checkClaudeCodeConnection } from '../../infrastructure/api/claude-code-client.js';
+import { t, applyI18n, setLocale, getLocale } from '../../shared/i18n.js';
 
 /**
  * 설정 UI를 초기화한다.
@@ -152,7 +153,7 @@ export async function initSettingsController($, updatePreview) {
 
     const models = MODELS[provider];
     modelSelect.innerHTML = models.map(m =>
-      `<option value="${m.value}">${m.label}</option>`
+      `<option value="${m.value}">${m.name} (${t('model.tier.' + m.tier)})</option>`
     ).join('');
 
     if (savedModel && models.some(m => m.value === savedModel)) {
@@ -199,10 +200,10 @@ export async function initSettingsController($, updatePreview) {
     }
 
     saveKeyText.textContent = '';
-    saveStatus.textContent = '저장 완료!';
+    saveStatus.textContent = t('popup.saved');
     updateStatus();
     setTimeout(() => {
-      saveKeyText.textContent = '저장';
+      saveKeyText.textContent = t('popup.save');
       saveStatus.textContent = '';
     }, 2000);
   });
@@ -230,6 +231,19 @@ export async function initSettingsController($, updatePreview) {
 
   displayModeSelect.addEventListener('change', async () => {
     await chrome.storage.local.set({ [STORAGE_KEYS.DISPLAY_MODE]: displayModeSelect.value });
+  });
+
+  // 화면 언어(UI locale) 셀렉트
+  const uiLangSelect = $('uiLang');
+  uiLangSelect.value = getLocale(); // popup.js가 이미 setLocale 완료
+  uiLangSelect.addEventListener('change', async () => {
+    setLocale(uiLangSelect.value);
+    await chrome.storage.local.set({ [STORAGE_KEYS.UI_LANG]: uiLangSelect.value });
+    applyI18n(document);                                  // 정적 텍스트
+    switchProvider(currentProvider, modelSelect.value);    // 모델 라벨 재조립(선택 유지)
+    updateStatus();                                        // 상태 문구
+    updateBgVisibility();                                  // 배경 hex/None
+    updatePanelColorHex();                                 // 패널색 hex/기본
   });
 
   // 스타일 컨트롤
@@ -283,7 +297,7 @@ export async function initSettingsController($, updatePreview) {
 
   retranslateBtn.addEventListener('click', async () => {
     retranslateBtn.disabled = true;
-    retranslateText.textContent = '재번역 중...';
+    retranslateText.textContent = t('popup.retranslating');
     retranslateBtn.classList.add('btn-loading');
 
     try {
@@ -291,18 +305,18 @@ export async function initSettingsController($, updatePreview) {
       if (isUdemyCourseTab(tab)) {
         const res = await chrome.tabs.sendMessage(tab.id, { type: 'RETRANSLATE_ALL' });
         const count = res?.count || 0;
-        retranslateText.textContent = `${count}건 재번역 완료!`;
+        retranslateText.textContent = t('popup.retranslateDone', { count });
       } else {
-        retranslateText.textContent = 'Udemy 페이지를 열어주세요';
+        retranslateText.textContent = t('popup.openUdemy');
       }
     } catch (_) {
-      retranslateText.textContent = 'Udemy 페이지를 열어주세요';
+      retranslateText.textContent = t('popup.openUdemy');
     }
 
     setTimeout(() => {
       retranslateBtn.disabled = false;
       retranslateBtn.classList.remove('btn-loading');
-      retranslateText.textContent = '현재 자막 재번역';
+      retranslateText.textContent = t('popup.retranslate');
     }, 2500);
   });
 
@@ -310,14 +324,14 @@ export async function initSettingsController($, updatePreview) {
 
   function updateBgVisibility() {
     const on = bgEnabledCheck.checked;
-    bgColorHex.textContent = on ? bgColorPicker.value : '없음';
+    bgColorHex.textContent = on ? bgColorPicker.value : t('style.none');
     bgOpacityGroup.style.display = on ? '' : 'none';
   }
 
   function updatePanelColorHex() {
     panelColorHex.textContent = panelColorEnabledCheck.checked
       ? panelColorPicker.value
-      : '유데미 기본';
+      : t('style.udemyDefault');
   }
 
   async function updateStatus() {
@@ -326,27 +340,27 @@ export async function initSettingsController($, updatePreview) {
 
     if (currentProvider === 'claude-code') {
       statusDot.className = 'status-dot';
-      statusText.textContent = `${providerName} 연결 확인 중...`;
+      statusText.textContent = t('popup.statusChecking', { provider: providerName });
 
       const ccUrl = claudeCodeUrlInput.value.trim() || 'http://localhost:3456';
       const connected = await checkClaudeCodeConnection(ccUrl);
 
       if (connected) {
         statusDot.className = 'status-dot connected';
-        statusText.textContent = `${providerName} 준비됨`;
+        statusText.textContent = t('popup.statusReady', { provider: providerName });
       } else {
         statusDot.className = 'status-dot error';
-        statusText.textContent = `${providerName} 미실행 — 터미널에서 node proxy-server/server.js 실행 필요`;
+        statusText.textContent = t('popup.statusNotRunning', { provider: providerName });
       }
     } else {
       const keyInput = currentProvider === 'claude' ? claudeApiKeyInput : geminiApiKeyInput;
       const hasKey = keyInput.value.trim().length > 0;
       if (!hasKey) {
         statusDot.className = 'status-dot error';
-        statusText.textContent = `${providerName} API 키를 입력하세요`;
+        statusText.textContent = t('popup.statusNeedKey', { provider: providerName });
       } else {
         statusDot.className = 'status-dot connected';
-        statusText.textContent = `${providerName} 준비됨`;
+        statusText.textContent = t('popup.statusReady', { provider: providerName });
       }
     }
   }
