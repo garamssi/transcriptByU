@@ -1,0 +1,87 @@
+{
+  "popup": {
+    "subtitle": "リアルタイム字幕翻訳",
+    "statusWaiting": "待機中",
+    "toggleTitle": "翻訳の有効化・無効化",
+    "aiProvider": "AIプロバイダー",
+    "selected": "✓ 選択中",
+    "apiKey": "APIキー",
+    "showPassword": "パスワードを表示",
+    "proxyUrl": "プロキシサーバーURL",
+    "save": "保存",
+    "saved": "保存しました！",
+    "retranslate": "再翻訳",
+    "retranslating": "再翻訳中...",
+    "retranslateDone": "{count}件を再翻訳しました！",
+    "openUdemy": "Udemyのコースページを開いてください",
+    "statusChecking": "{provider} — 接続確認中...",
+    "statusReady": "{provider} 準備完了",
+    "statusNotRunning": "{provider} 未起動 — ターミナルで node proxy-server/server.js を実行してください",
+    "statusNeedKey": "{provider}のAPIキーを入力してください",
+    "enableOn": "翻訳オン",
+    "enableOff": "翻訳オフ"
+  },
+  "settings": {
+    "model": "モデル",
+    "targetLang": "翻訳言語",
+    "displayMode": "表示モード",
+    "uiLang": "画面言語"
+  },
+  "displayModeOptions": {
+    "translation": "翻訳のみ",
+    "both": "原文 + 翻訳（同時表示）",
+    "original": "原文のみ"
+  },
+  "style": {
+    "heading": "翻訳字幕のスタイル",
+    "fontSize": "文字サイズ",
+    "fontColor": "文字色",
+    "bgColor": "背景色",
+    "bgOpacity": "背景の不透明度",
+    "panelColor": "パネルの文字色",
+    "use": "使用",
+    "none": "なし",
+    "udemyDefault": "Udemyデフォルト",
+    "preview": "プレビュー",
+    "previewText": "翻訳字幕のプレビュー"
+  },
+  "cache": {
+    "title": "キャッシュ",
+    "manage": "キャッシュ管理",
+    "savedSubtitles": "保存済みの翻訳字幕",
+    "search": "タイトル検索(コース·セクション·レッスン)",
+    "selectAll": "すべて選択",
+    "deleteSelected": "選択を削除",
+    "deleteAll": "すべて削除",
+    "loading": "読み込み中...",
+    "empty": "キャッシュは空です",
+    "noResults": "検索結果がありません",
+    "back": "戻る",
+    "count": "{total}件",
+    "selectedCount": "{selected}件選択 / 全{total}件",
+    "subtitleCount": "字幕{count}件",
+    "noCourse": "(コース不明)",
+    "noSection": "(セクションなし)",
+    "noTitle": "(タイトルなし)",
+    "delCourse": "このコースのキャッシュをすべて削除",
+    "delSection": "このセクションのキャッシュを削除",
+    "delLesson": "このレッスンのキャッシュを削除"
+  },
+  "badge": {
+    "translatingTo": "{lang}に翻訳中"
+  },
+  "model": {
+    "tier": {
+      "fastCheap": "高速・低コスト",
+      "fast": "高速",
+      "balanced": "バランス",
+      "recommended": "推奨",
+      "highQuality": "高品質"
+    }
+  },
+  "langNames": {
+    "한국어": "韓国語",
+    "日本語": "日本語",
+    "中文": "中国語"
+  }
+}

@@ -10,9 +10,10 @@ import { initVttBridge, setActiveLang } from './src/presentation/content/vtt-bri
 import { setBadgeEnabled, setBadgeLang } from './src/presentation/content/badge-manager.js';
 import en from './locales/en.json';
 import ko from './locales/ko.json';
+import ja from './locales/ja.json';
 import { setCatalogs, setLocale } from './src/shared/i18n.js';
 
-setCatalogs({ en, ko });
+setCatalogs({ en, ko, ja });
 
 // === storage 변경 감지 → 즉시 스타일 반영 ===
 chrome.storage.onChanged.addListener((changes, area) => {

@@ -837,7 +837,9 @@
       statusChecking: "{provider} \u2014 checking connection...",
       statusReady: "{provider} ready",
       statusNotRunning: "{provider} not running \u2014 run `node proxy-server/server.js` in a terminal",
-      statusNeedKey: "Enter your {provider} API key"
+      statusNeedKey: "Enter your {provider} API key",
+      enableOn: "Translation on",
+      enableOff: "Translation off"
     },
     settings: {
       model: "Model",
@@ -924,7 +926,9 @@
       statusChecking: "{provider} \uC5F0\uACB0 \uD655\uC778 \uC911...",
       statusReady: "{provider} \uC900\uBE44\uB428",
       statusNotRunning: "{provider} \uBBF8\uC2E4\uD589 \u2014 \uD130\uBBF8\uB110\uC5D0\uC11C node proxy-server/server.js \uC2E4\uD589 \uD544\uC694",
-      statusNeedKey: "{provider} API \uD0A4\uB97C \uC785\uB825\uD558\uC138\uC694"
+      statusNeedKey: "{provider} API \uD0A4\uB97C \uC785\uB825\uD558\uC138\uC694",
+      enableOn: "\uBC88\uC5ED \uCF1C\uC9D0",
+      enableOff: "\uBC88\uC5ED \uAEBC\uC9D0"
     },
     settings: {
       model: "\uBAA8\uB378",
@@ -991,8 +995,97 @@
     }
   };
 
+  // locales/ja.json
+  var ja_default = {
+    popup: {
+      subtitle: "\u30EA\u30A2\u30EB\u30BF\u30A4\u30E0\u5B57\u5E55\u7FFB\u8A33",
+      statusWaiting: "\u5F85\u6A5F\u4E2D",
+      toggleTitle: "\u7FFB\u8A33\u306E\u6709\u52B9\u5316\u30FB\u7121\u52B9\u5316",
+      aiProvider: "AI\u30D7\u30ED\u30D0\u30A4\u30C0\u30FC",
+      selected: "\u2713 \u9078\u629E\u4E2D",
+      apiKey: "API\u30AD\u30FC",
+      showPassword: "\u30D1\u30B9\u30EF\u30FC\u30C9\u3092\u8868\u793A",
+      proxyUrl: "\u30D7\u30ED\u30AD\u30B7\u30B5\u30FC\u30D0\u30FCURL",
+      save: "\u4FDD\u5B58",
+      saved: "\u4FDD\u5B58\u3057\u307E\u3057\u305F\uFF01",
+      retranslate: "\u518D\u7FFB\u8A33",
+      retranslating: "\u518D\u7FFB\u8A33\u4E2D...",
+      retranslateDone: "{count}\u4EF6\u3092\u518D\u7FFB\u8A33\u3057\u307E\u3057\u305F\uFF01",
+      openUdemy: "Udemy\u306E\u30B3\u30FC\u30B9\u30DA\u30FC\u30B8\u3092\u958B\u3044\u3066\u304F\u3060\u3055\u3044",
+      statusChecking: "{provider} \u2014 \u63A5\u7D9A\u78BA\u8A8D\u4E2D...",
+      statusReady: "{provider} \u6E96\u5099\u5B8C\u4E86",
+      statusNotRunning: "{provider} \u672A\u8D77\u52D5 \u2014 \u30BF\u30FC\u30DF\u30CA\u30EB\u3067 node proxy-server/server.js \u3092\u5B9F\u884C\u3057\u3066\u304F\u3060\u3055\u3044",
+      statusNeedKey: "{provider}\u306EAPI\u30AD\u30FC\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044",
+      enableOn: "\u7FFB\u8A33\u30AA\u30F3",
+      enableOff: "\u7FFB\u8A33\u30AA\u30D5"
+    },
+    settings: {
+      model: "\u30E2\u30C7\u30EB",
+      targetLang: "\u7FFB\u8A33\u8A00\u8A9E",
+      displayMode: "\u8868\u793A\u30E2\u30FC\u30C9",
+      uiLang: "\u753B\u9762\u8A00\u8A9E"
+    },
+    displayModeOptions: {
+      translation: "\u7FFB\u8A33\u306E\u307F",
+      both: "\u539F\u6587 + \u7FFB\u8A33\uFF08\u540C\u6642\u8868\u793A\uFF09",
+      original: "\u539F\u6587\u306E\u307F"
+    },
+    style: {
+      heading: "\u7FFB\u8A33\u5B57\u5E55\u306E\u30B9\u30BF\u30A4\u30EB",
+      fontSize: "\u6587\u5B57\u30B5\u30A4\u30BA",
+      fontColor: "\u6587\u5B57\u8272",
+      bgColor: "\u80CC\u666F\u8272",
+      bgOpacity: "\u80CC\u666F\u306E\u4E0D\u900F\u660E\u5EA6",
+      panelColor: "\u30D1\u30CD\u30EB\u306E\u6587\u5B57\u8272",
+      use: "\u4F7F\u7528",
+      none: "\u306A\u3057",
+      udemyDefault: "Udemy\u30C7\u30D5\u30A9\u30EB\u30C8",
+      preview: "\u30D7\u30EC\u30D3\u30E5\u30FC",
+      previewText: "\u7FFB\u8A33\u5B57\u5E55\u306E\u30D7\u30EC\u30D3\u30E5\u30FC"
+    },
+    cache: {
+      title: "\u30AD\u30E3\u30C3\u30B7\u30E5",
+      manage: "\u30AD\u30E3\u30C3\u30B7\u30E5\u7BA1\u7406",
+      savedSubtitles: "\u4FDD\u5B58\u6E08\u307F\u306E\u7FFB\u8A33\u5B57\u5E55",
+      search: "\u30BF\u30A4\u30C8\u30EB\u691C\u7D22(\u30B3\u30FC\u30B9\xB7\u30BB\u30AF\u30B7\u30E7\u30F3\xB7\u30EC\u30C3\u30B9\u30F3)",
+      selectAll: "\u3059\u3079\u3066\u9078\u629E",
+      deleteSelected: "\u9078\u629E\u3092\u524A\u9664",
+      deleteAll: "\u3059\u3079\u3066\u524A\u9664",
+      loading: "\u8AAD\u307F\u8FBC\u307F\u4E2D...",
+      empty: "\u30AD\u30E3\u30C3\u30B7\u30E5\u306F\u7A7A\u3067\u3059",
+      noResults: "\u691C\u7D22\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093",
+      back: "\u623B\u308B",
+      count: "{total}\u4EF6",
+      selectedCount: "{selected}\u4EF6\u9078\u629E / \u5168{total}\u4EF6",
+      subtitleCount: "\u5B57\u5E55{count}\u4EF6",
+      noCourse: "(\u30B3\u30FC\u30B9\u4E0D\u660E)",
+      noSection: "(\u30BB\u30AF\u30B7\u30E7\u30F3\u306A\u3057)",
+      noTitle: "(\u30BF\u30A4\u30C8\u30EB\u306A\u3057)",
+      delCourse: "\u3053\u306E\u30B3\u30FC\u30B9\u306E\u30AD\u30E3\u30C3\u30B7\u30E5\u3092\u3059\u3079\u3066\u524A\u9664",
+      delSection: "\u3053\u306E\u30BB\u30AF\u30B7\u30E7\u30F3\u306E\u30AD\u30E3\u30C3\u30B7\u30E5\u3092\u524A\u9664",
+      delLesson: "\u3053\u306E\u30EC\u30C3\u30B9\u30F3\u306E\u30AD\u30E3\u30C3\u30B7\u30E5\u3092\u524A\u9664"
+    },
+    badge: {
+      translatingTo: "{lang}\u306B\u7FFB\u8A33\u4E2D"
+    },
+    model: {
+      tier: {
+        fastCheap: "\u9AD8\u901F\u30FB\u4F4E\u30B3\u30B9\u30C8",
+        fast: "\u9AD8\u901F",
+        balanced: "\u30D0\u30E9\u30F3\u30B9",
+        recommended: "\u63A8\u5968",
+        highQuality: "\u9AD8\u54C1\u8CEA"
+      }
+    },
+    langNames: {
+      \uD55C\uAD6D\uC5B4: "\u97D3\u56FD\u8A9E",
+      \u65E5\u672C\u8A9E: "\u65E5\u672C\u8A9E",
+      \u4E2D\u6587: "\u4E2D\u56FD\u8A9E"
+    }
+  };
+
   // content.src.js
-  setCatalogs({ en: en_default, ko: ko_default });
+  setCatalogs({ en: en_default, ko: ko_default, ja: ja_default });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes[STORAGE_KEYS.ENABLED]) {

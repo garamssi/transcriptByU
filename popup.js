@@ -3,6 +3,7 @@ import { initCacheDialog } from './src/presentation/popup/cache-dialog.js';
 import { initSettingsController } from './src/presentation/popup/settings-controller.js';
 import en from './locales/en.json' with { type: 'json' };
 import ko from './locales/ko.json' with { type: 'json' };
+import ja from './locales/ja.json' with { type: 'json' };
 import { setCatalogs, setLocale, applyI18n } from './src/shared/i18n.js';
 import { STORAGE_KEYS } from './src/domain/constants.js';
 
@@ -10,7 +11,7 @@ const $ = (id) => document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded', async () => {
   // i18n 초기화 (다른 모든 t()/applyI18n 사용보다 먼저)
-  setCatalogs({ en, ko });
+  setCatalogs({ en, ko, ja });
   const uiLangStored = await chrome.storage.local.get(STORAGE_KEYS.UI_LANG);
   setLocale(uiLangStored[STORAGE_KEYS.UI_LANG]); // 값 없으면 'en' 폴백
   applyI18n(document);

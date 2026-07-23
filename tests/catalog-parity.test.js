@@ -1,7 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const en = require('../locales/en.json');
-const ko = require('../locales/ko.json');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const LOCALES_DIR = path.join(__dirname, '..', 'locales');
+const localeFiles = fs.readdirSync(LOCALES_DIR).filter((f) => f.endsWith('.json'));
+const locales = Object.fromEntries(
+  localeFiles.map((f) => [path.basename(f, '.json'), require(path.join(LOCALES_DIR, f))]),
+);
 
 function flatten(obj, prefix = '', out = {}) {
   for (const [k, v] of Object.entries(obj)) {
@@ -12,14 +18,22 @@ function flatten(obj, prefix = '', out = {}) {
   return out;
 }
 
-test('en.json 과 ko.json 의 키 세트가 동일', () => {
-  const ek = Object.keys(flatten(en)).sort();
-  const kk = Object.keys(flatten(ko)).sort();
-  assert.deepStrictEqual(ek.filter((k) => !kk.includes(k)), [], 'ko.json 누락 키');
-  assert.deepStrictEqual(kk.filter((k) => !ek.includes(k)), [], 'en.json 누락 키');
-});
+const en = locales.en;
+const enKeys = Object.keys(flatten(en)).sort();
 
-test('모든 값이 비어있지 않은 문자열', () => {
-  for (const [k, v] of Object.entries(flatten(en))) assert.ok(typeof v === 'string' && v.length, `en.${k}`);
-  for (const [k, v] of Object.entries(flatten(ko))) assert.ok(typeof v === 'string' && v.length, `ko.${k}`);
+for (const [name, catalog] of Object.entries(locales)) {
+  if (name === 'en') continue;
+  test(`en.json 과 ${name}.json 의 키 세트가 동일`, () => {
+    const keys = Object.keys(flatten(catalog)).sort();
+    assert.deepStrictEqual(enKeys.filter((k) => !keys.includes(k)), [], `${name}.json 누락 키`);
+    assert.deepStrictEqual(keys.filter((k) => !enKeys.includes(k)), [], 'en.json 누락 키(추가 키 존재)');
+  });
+}
+
+test('모든 로케일의 모든 값이 비어있지 않은 문자열', () => {
+  for (const [name, catalog] of Object.entries(locales)) {
+    for (const [k, v] of Object.entries(flatten(catalog))) {
+      assert.ok(typeof v === 'string' && v.length, `${name}.${k}`);
+    }
+  }
 });

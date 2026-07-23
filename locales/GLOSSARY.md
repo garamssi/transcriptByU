@@ -27,30 +27,30 @@
 
 | 개념 (concept) | en | ko | (ja) | (zh) |
 |---|---|---|---|---|
-| translation / translate | Translation / translate | 번역 | | |
-| subtitle | subtitle | 자막 | | |
-| cache | Cache | 캐시 | | |
-| provider | Provider | 제공자 | | |
-| model | Model | 모델 | | |
-| display (mode) | Display | 표시 | | |
-| original (text) | Original | 원본 | | |
-| background | Background | 배경 | | |
-| opacity | opacity | 투명도 | | |
-| text color | Text color | 글자 색상 | | |
-| font size | Font size | 글자 크기 | | |
-| panel | Panel | 패널 | | |
-| preview | Preview | 미리보기 | | |
-| course | course | 코스 | | |
-| section | section | 섹션 | | |
-| lesson | lesson | 레슨 | | |
-| save | Save | 저장 | | |
-| delete | Delete | 삭제 | | |
-| select | Select | 선택 | | |
-| search | Search | 검색 | | |
-| ready | ready | 준비됨 | | |
-| language (UI) | Language | 화면 언어 | | |
-| on / enabled | on | 켜짐 (토글) / 사용 (스위치) | | |
-| off / disabled | off | 꺼짐 | | |
+| translation / translate | Translation / translate | 번역 | 翻訳 | |
+| subtitle | subtitle | 자막 | 字幕 | |
+| cache | Cache | 캐시 | キャッシュ | |
+| provider | Provider | 제공자 | プロバイダー | |
+| model | Model | 모델 | モデル | |
+| display (mode) | Display | 표시 | 表示 | |
+| original (text) | Original | 원본 | 原文 | |
+| background | Background | 배경 | 背景 | |
+| opacity | opacity | 투명도 | 不透明度 | |
+| text color | Text color | 글자 색상 | 文字色 | |
+| font size | Font size | 글자 크기 | 文字サイズ | |
+| panel | Panel | 패널 | パネル | |
+| preview | Preview | 미리보기 | プレビュー | |
+| course | course | 코스 | コース | |
+| section | section | 섹션 | セクション | |
+| lesson | lesson | 레슨 | レッスン | |
+| save | Save | 저장 | 保存 | |
+| delete | Delete | 삭제 | 削除 | |
+| select | Select | 선택 | 選択 | |
+| search | Search | 검색 | 検索 | |
+| ready | ready | 준비됨 | 準備完了 | |
+| language (UI) | Language | 화면 언어 | 画面言語 | |
+| on / enabled | on | 켜짐 (토글) / 사용 (스위치) | オン (토글) / 使用 (스위치) | |
+| off / disabled | off | 꺼짐 | オフ | |
 
 > 참고: ko에서 `on`은 문맥별로 다르다 — 토글 헤드라인은 `켜짐/꺼짐`(enableOn/Off), 개별 스위치 라벨은 `사용`(style.use). 새 언어도 이 둘을 구분할지 판단.
 
@@ -60,13 +60,13 @@
 
 모델명 뒤 괄호에 붙는 등급어. 번역 대상.
 
-| tier 키 | en | ko |
-|---|---|---|
-| fastCheap | fast / cheap | 빠름/저렴 |
-| fast | fast | 빠름 |
-| balanced | balanced | 균형 |
-| recommended | recommended | 권장 |
-| highQuality | high quality | 고품질 |
+| tier 키 | en | ko | ja |
+|---|---|---|---|
+| fastCheap | fast / cheap | 빠름/저렴 | 高速・低コスト |
+| fast | fast | 빠름 | 高速 |
+| balanced | balanced | 균형 | バランス |
+| recommended | recommended | 권장 | 推奨 |
+| highQuality | high quality | 고품질 | 高品質 |
 
 렌더 형태: `{모델명} ({등급어})` — 예 `Sonnet 5 (balanced)` / `Sonnet 5 (균형)`.
 
