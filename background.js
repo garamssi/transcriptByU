@@ -1,7 +1,7 @@
 import { LRUCache } from './src/infrastructure/cache/lru-cache.js';
 import { l2Get, l2Set, l2Delete } from './src/infrastructure/cache/storage-cache.js';
 import { callApi } from './src/infrastructure/api/api-client.js';
-import { getProviderConfig } from './src/infrastructure/chrome/storage-adapter.js';
+import { getProviderConfig, getSettings } from './src/infrastructure/chrome/storage-adapter.js';
 import { TranslationService } from './src/application/translation-service.js';
 import { CacheService } from './src/application/cache-service.js';
 
@@ -13,6 +13,7 @@ const translationService = new TranslationService({
   l2Cache: { l2Get, l2Set, l2Delete },
   callApi,
   getProviderConfig,
+  getSettings,
 });
 
 const cacheService = new CacheService(l1Cache);

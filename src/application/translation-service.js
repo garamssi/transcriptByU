@@ -1,4 +1,5 @@
-import { CHUNK_SIZE, DEFAULT_TARGET_LANG } from '../domain/constants.js';
+import { CHUNK_SIZE } from '../domain/constants.js';
+import { DEFAULT_TARGET_CODE } from '../domain/languages.js';
 import { buildBatchSystemPrompt } from '../domain/prompt-builder.js';
 import { parseBatchResponse } from '../domain/response-parser.js';
 import { lectureCacheKey } from '../domain/cache-key.js';
@@ -14,28 +15,30 @@ export class TranslationService {
    * @param {{ l2Get: Function, l2Set: Function }} deps.l2Cache - L2 스토리지 캐시
    * @param {Function} deps.callApi - API 호출 함수
    * @param {Function} deps.getProviderConfig - Provider 설정 로드 함수
+   * @param {Function} deps.getSettings - 번역 게이트 설정 로드 함수
    */
-  constructor({ l1Cache, l2Cache, callApi, getProviderConfig }) {
+  constructor({ l1Cache, l2Cache, callApi, getProviderConfig, getSettings }) {
     this.l1Cache = l1Cache;
     this.l2Cache = l2Cache;
     this.callApi = callApi;
     this.getProviderConfig = getProviderConfig;
+    this.getSettings = getSettings;
   }
 
   /**
    * 배치 번역 (캐시 조회 → 미번역분 API 호출 → 캐시 저장)
    */
-  async translateBatch({ texts, targetLang: msgLang, course, lecture, section }) {
+  async translateBatch({ texts, targetCode, sourceCode, course, lecture, section }) {
     try {
-      const stored = await chrome.storage.local.get(['enabled', 'targetLang']);
-      if (stored.enabled === false) return { error: 'DISABLED' };
+      const { enabled } = await this.getSettings();
+      if (enabled === false) return { error: 'DISABLED' };
 
       const { provider, apiKey, model } = await this.getProviderConfig();
       if (!apiKey) return { error: 'NO_API_KEY' };
 
-      const targetLang = msgLang || stored.targetLang || DEFAULT_TARGET_LANG;
+      const target = targetCode || DEFAULT_TARGET_CODE;
       const context = { course: course || '', lecture: lecture || '', section: section || '' };
-      const lKey = lectureCacheKey(targetLang, context.course, context.section, context.lecture);
+      const lKey = lectureCacheKey(target, context.course, context.section, context.lecture);
 
       // 1) 강의 캐시 로드 (L1 → L2)
       let lectureTranslations = this.l1Cache.get(lKey);
@@ -57,7 +60,7 @@ export class TranslationService {
       let skippedCount = 0;
 
       for (let i = 0; i < texts.length; i++) {
-        if (isAlreadyTargetLanguage(texts[i], targetLang)) {
+        if (isAlreadyTargetLanguage(texts[i], target, sourceCode)) {
           results[i] = { skipped: true };
           skippedCount++;
           continue;
@@ -71,13 +74,13 @@ export class TranslationService {
       }
 
       if (skippedCount > 0) {
-        console.log(`[UdemyTranslator] ${skippedCount}/${texts.length} lines already in ${targetLang} — skipped`);
+        console.log(`[UdemyTranslator] ${skippedCount}/${texts.length} lines already in ${target} — skipped`);
       }
 
       // 3) 미번역분: 중복 제거 후 API 호출
       if (uncachedIndices.length > 0) {
         const uniqueTexts = [...new Set(uncachedIndices.map(i => texts[i]))];
-        const systemPrompt = buildBatchSystemPrompt(targetLang, context);
+        const systemPrompt = buildBatchSystemPrompt(target, context);
 
         try {
           const newTranslations = await this._translateByProvider(uniqueTexts, systemPrompt, provider, apiKey, model);
@@ -119,9 +122,9 @@ export class TranslationService {
    * 특정 강의의 캐시를 삭제한다 (L1 + L2).
    */
   async clearLectureCache({ lang, course, lecture, section }) {
-    const targetLang = lang;
+    const target = lang;
     const context = { course: course || '', lecture: lecture || '', section: section || '' };
-    const lKey = lectureCacheKey(targetLang, context.course, context.section, context.lecture);
+    const lKey = lectureCacheKey(target, context.course, context.section, context.lecture);
 
     this.l1Cache.delete(lKey);
     await this.l2Cache.l2Delete(lKey);

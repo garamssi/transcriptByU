@@ -33,3 +33,12 @@ export async function getProviderConfig() {
 
   return { provider, apiKey, model };
 }
+
+/**
+ * 번역 게이트 설정을 로드한다.
+ * @returns {Promise<{ enabled: boolean }>}
+ */
+export async function getSettings() {
+  const s = await chrome.storage.local.get(['enabled']);
+  return { enabled: s.enabled !== false };
+}
