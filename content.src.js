@@ -8,6 +8,11 @@ import { initCaptionFinder } from './src/presentation/content/caption-manager.js
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
 import { initVttBridge, setActiveLang } from './src/presentation/content/vtt-bridge.js';
 import { setBadgeEnabled, setBadgeLang } from './src/presentation/content/badge-manager.js';
+import en from './locales/en.json';
+import ko from './locales/ko.json';
+import { setCatalogs, setLocale } from './src/shared/i18n.js';
+
+setCatalogs({ en, ko });
 
 // === storage 변경 감지 → 즉시 스타일 반영 ===
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -26,6 +31,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes[STORAGE_KEYS.TARGET_LANG]) {
     setActiveLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
     setBadgeLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
+  }
+
+  if (changes[STORAGE_KEYS.UI_LANG]) {
+    setLocale(changes[STORAGE_KEYS.UI_LANG].newValue);
+    setBadgeLang(); // 대상언어 유지, UI 로케일만 반영해 재렌더
   }
 
   const hasStyleChange = Object.keys(changes).some(k => STYLE_CHANGE_KEYS.has(k));
@@ -63,7 +73,8 @@ initVttBridge();
 loadStyle().then(async () => {
   console.log('[UdemyTranslator] style loaded, initializing...');
   updateDynamicStyles();
-  const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG]);
+  const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.UI_LANG]);
+  setLocale(s[STORAGE_KEYS.UI_LANG]); // 배지 문구 생성보다 먼저 (값 없으면 'en')
   setActiveLang(s[STORAGE_KEYS.TARGET_LANG]);
   setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
   setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);

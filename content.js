@@ -22,7 +22,8 @@
     STYLE_BG_OPACITY: "styleBgOpacity",
     STYLE_PANEL_COLOR: "stylePanelColor",
     STYLE_PANEL_COLOR_ENABLED: "stylePanelColorEnabled",
-    STYLE_EXPANDED: "styleExpanded"
+    STYLE_EXPANDED: "styleExpanded",
+    UI_LANG: "uiLang"
   };
   var L1_MAX_SIZE = 50;
   var DEFAULT_TARGET_LANG = "\uD55C\uAD6D\uC5B4";
@@ -328,10 +329,10 @@
     if (targetLang) currentLang = targetLang;
     const ctx = getLectureContext();
     const key = currentLectureKey();
-    const marker = (t) => `${key}\0${t}`;
-    const toSend = uniqueTexts.filter((t) => !inFlight.has(marker(t)));
+    const marker = (t2) => `${key}\0${t2}`;
+    const toSend = uniqueTexts.filter((t2) => !inFlight.has(marker(t2)));
     if (toSend.length === 0) return 0;
-    toSend.forEach((t) => inFlight.add(marker(t)));
+    toSend.forEach((t2) => inFlight.add(marker(t2)));
     let response;
     try {
       response = await chrome.runtime.sendMessage({
@@ -342,7 +343,7 @@
         section: ctx.section
       });
     } finally {
-      toSend.forEach((t) => inFlight.delete(marker(t)));
+      toSend.forEach((t2) => inFlight.delete(marker(t2)));
     }
     if (response?.error) {
       console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
@@ -375,17 +376,46 @@
     processedUrls.clear();
   }
 
+  // src/shared/i18n.js
+  var catalogs = {};
+  var locale = "en";
+  function setCatalogs(c) {
+    catalogs = c || {};
+  }
+  function setLocale(loc) {
+    locale = loc && catalogs[loc] ? loc : "en";
+  }
+  function lookup(catalog, key) {
+    if (!catalog) return void 0;
+    return key.split(".").reduce((o, k) => o == null ? void 0 : o[k], catalog);
+  }
+  function t(key, params) {
+    let val = lookup(catalogs[locale], key);
+    if (val == null) val = lookup(catalogs.en, key);
+    if (val == null) return key;
+    if (params) {
+      val = String(val).replace(/\{(\w+)\}/g, (m, p) => Object.prototype.hasOwnProperty.call(params, p) ? String(params[p]) : m);
+    }
+    return val;
+  }
+
   // src/presentation/content/badge-manager.js
   var MARK_SVG = '<svg viewBox="0 0 100 100" aria-hidden="true"><rect x="4" y="4" width="92" height="92" rx="26" fill="#8B3DF5"/><path d="M31 26 L31 52 A19 19 0 0 0 69 52 L69 26" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><rect x="30" y="74" width="40" height="9" rx="4.5" fill="#fff"/><rect x="30" y="74" width="15" height="9" rx="4.5" fill="#3DF5C8"/></svg>';
   var badgeEl = null;
   var anchorEl = null;
   var lang = "\uD55C\uAD6D\uC5B4";
   var enabled = true;
+  function badgeText() {
+    const nameKey = "langNames." + lang;
+    const name = t(nameKey);
+    const display = name === nameKey ? lang : name;
+    return t("badge.translatingTo", { lang: display });
+  }
   function build() {
     const el = document.createElement("div");
     el.className = "udemy-translator-badge";
     el.innerHTML = `${MARK_SVG}<span class="utb-text"></span><span class="utb-dot"></span>`;
-    el.querySelector(".utb-text").textContent = `${lang} \uBC88\uC5ED \uC911`;
+    el.querySelector(".utb-text").textContent = badgeText();
     return el;
   }
   function mountTarget() {
@@ -394,8 +424,8 @@
     return video?.parentElement || null;
   }
   function setBadgeLang(l) {
-    lang = l || "\uD55C\uAD6D\uC5B4";
-    if (badgeEl) badgeEl.querySelector(".utb-text").textContent = `${lang} \uBC88\uC5ED \uC911`;
+    if (l) lang = l;
+    if (badgeEl) badgeEl.querySelector(".utb-text").textContent = badgeText();
   }
   function setBadgeEnabled(v) {
     enabled = v !== false;
@@ -787,7 +817,182 @@
     }
   }
 
+  // locales/en.json
+  var en_default = {
+    popup: {
+      subtitle: "Live subtitle translation",
+      statusWaiting: "Waiting",
+      toggleTitle: "Enable/disable translation",
+      aiProvider: "AI Provider",
+      selected: "\u2713 Selected",
+      apiKey: "API Key",
+      showPassword: "Show password",
+      proxyUrl: "Proxy server URL",
+      save: "Save",
+      saved: "Saved!",
+      retranslate: "Re-translate",
+      retranslating: "Re-translating...",
+      retranslateDone: "{count} re-translated!",
+      openUdemy: "Please open a Udemy course page",
+      statusChecking: "{provider} \u2014 checking connection...",
+      statusReady: "{provider} ready",
+      statusNotRunning: "{provider} not running \u2014 run `node proxy-server/server.js` in a terminal",
+      statusNeedKey: "Enter your {provider} API key"
+    },
+    settings: {
+      model: "Model",
+      targetLang: "Translation",
+      displayMode: "Display",
+      uiLang: "Language"
+    },
+    displayModeOptions: {
+      translation: "Translation only",
+      both: "Original + Translation",
+      original: "Original only"
+    },
+    style: {
+      heading: "Subtitle style",
+      fontSize: "Font size",
+      fontColor: "Text color",
+      bgColor: "Background color",
+      bgOpacity: "Background opacity",
+      panelColor: "Panel text color",
+      use: "On",
+      none: "None",
+      udemyDefault: "Udemy default",
+      preview: "Preview",
+      previewText: "Translated subtitle preview"
+    },
+    cache: {
+      title: "Cache",
+      manage: "Manage cache",
+      savedSubtitles: "Saved translations",
+      search: "Search title (course \xB7 section \xB7 lesson)",
+      selectAll: "Select all",
+      deleteSelected: "Delete selected",
+      deleteAll: "Delete all",
+      loading: "Loading...",
+      empty: "Cache is empty",
+      noResults: "No results",
+      back: "Back",
+      count: "{total} items",
+      selectedCount: "{selected} selected / {total} total",
+      subtitleCount: "{count} subtitles",
+      noCourse: "(unknown course)",
+      noSection: "(no section)",
+      noTitle: "(untitled)",
+      delCourse: "Delete all cache for this course",
+      delSection: "Delete cache for this section",
+      delLesson: "Delete cache for this lesson"
+    },
+    badge: {
+      translatingTo: "Translating to {lang}"
+    },
+    model: {
+      tier: {
+        fastCheap: "fast / cheap",
+        fast: "fast",
+        balanced: "balanced",
+        recommended: "recommended",
+        highQuality: "high quality"
+      }
+    },
+    langNames: {
+      \uD55C\uAD6D\uC5B4: "Korean",
+      \u65E5\u672C\u8A9E: "Japanese",
+      \u4E2D\u6587: "Chinese"
+    }
+  };
+
+  // locales/ko.json
+  var ko_default = {
+    popup: {
+      subtitle: "\uC2E4\uC2DC\uAC04 \uC790\uB9C9 \uBC88\uC5ED",
+      statusWaiting: "\uB300\uAE30 \uC911",
+      toggleTitle: "\uBC88\uC5ED \uD65C\uC131\uD654/\uBE44\uD65C\uC131\uD654",
+      aiProvider: "AI \uC81C\uACF5\uC790",
+      selected: "\u2713 \uC120\uD0DD\uB428",
+      apiKey: "API \uD0A4",
+      showPassword: "\uBE44\uBC00\uBC88\uD638 \uD45C\uC2DC",
+      proxyUrl: "\uD504\uB85D\uC2DC \uC11C\uBC84 URL",
+      save: "\uC800\uC7A5",
+      saved: "\uC800\uC7A5 \uC644\uB8CC!",
+      retranslate: "\uC7AC\uBC88\uC5ED",
+      retranslating: "\uC7AC\uBC88\uC5ED \uC911...",
+      retranslateDone: "{count}\uAC74 \uC7AC\uBC88\uC5ED \uC644\uB8CC!",
+      openUdemy: "Udemy \uD398\uC774\uC9C0\uB97C \uC5F4\uC5B4\uC8FC\uC138\uC694",
+      statusChecking: "{provider} \uC5F0\uACB0 \uD655\uC778 \uC911...",
+      statusReady: "{provider} \uC900\uBE44\uB428",
+      statusNotRunning: "{provider} \uBBF8\uC2E4\uD589 \u2014 \uD130\uBBF8\uB110\uC5D0\uC11C node proxy-server/server.js \uC2E4\uD589 \uD544\uC694",
+      statusNeedKey: "{provider} API \uD0A4\uB97C \uC785\uB825\uD558\uC138\uC694"
+    },
+    settings: {
+      model: "\uBAA8\uB378",
+      targetLang: "\uBC88\uC5ED \uC5B8\uC5B4",
+      displayMode: "\uD45C\uC2DC \uBAA8\uB4DC",
+      uiLang: "\uD654\uBA74 \uC5B8\uC5B4"
+    },
+    displayModeOptions: {
+      translation: "\uBC88\uC5ED\uB9CC",
+      both: "\uC6D0\uBCF8 + \uBC88\uC5ED (\uB3D9\uC2DC)",
+      original: "\uC6D0\uBCF8\uB9CC"
+    },
+    style: {
+      heading: "\uBC88\uC5ED \uC790\uB9C9 \uC2A4\uD0C0\uC77C",
+      fontSize: "\uAE00\uC790 \uD06C\uAE30",
+      fontColor: "\uAE00\uC790 \uC0C9\uC0C1",
+      bgColor: "\uBC30\uACBD \uC0C9\uC0C1",
+      bgOpacity: "\uBC30\uACBD \uD22C\uBA85\uB3C4",
+      panelColor: "\uD328\uB110 \uAE00\uC790\uC0C9",
+      use: "\uC0AC\uC6A9",
+      none: "\uC5C6\uC74C",
+      udemyDefault: "\uC720\uB370\uBBF8 \uAE30\uBCF8",
+      preview: "\uBBF8\uB9AC\uBCF4\uAE30",
+      previewText: "\uBC88\uC5ED\uB41C \uC790\uB9C9 \uBBF8\uB9AC\uBCF4\uAE30"
+    },
+    cache: {
+      title: "\uCE90\uC2DC",
+      manage: "\uCE90\uC2DC \uAD00\uB9AC",
+      savedSubtitles: "\uC800\uC7A5\uB41C \uBC88\uC5ED \uC790\uB9C9",
+      search: "\uC81C\uBAA9 \uAC80\uC0C9 (\uCF54\uC2A4\xB7\uC139\uC158\xB7\uB808\uC2A8)",
+      selectAll: "\uC804\uCCB4 \uC120\uD0DD",
+      deleteSelected: "\uC120\uD0DD \uC0AD\uC81C",
+      deleteAll: "\uC804\uCCB4 \uC0AD\uC81C",
+      loading: "\uB85C\uB529 \uC911...",
+      empty: "\uCE90\uC2DC\uAC00 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4",
+      noResults: "\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4",
+      back: "\uB4A4\uB85C",
+      count: "{total}\uAC1C \uD56D\uBAA9",
+      selectedCount: "{selected}\uAC1C \uC120\uD0DD / \uC804\uCCB4 {total}\uAC1C",
+      subtitleCount: "{count}\uAC1C \uC790\uB9C9",
+      noCourse: "(\uCF54\uC2A4 \uBBF8\uC0C1)",
+      noSection: "(\uC139\uC158 \uC5C6\uC74C)",
+      noTitle: "(\uC81C\uBAA9 \uC5C6\uC74C)",
+      delCourse: "\uC774 \uCF54\uC2A4 \uCE90\uC2DC \uC804\uCCB4 \uC0AD\uC81C",
+      delSection: "\uC774 \uC139\uC158 \uCE90\uC2DC \uC0AD\uC81C",
+      delLesson: "\uC774 \uB808\uC2A8 \uCE90\uC2DC \uC0AD\uC81C"
+    },
+    badge: {
+      translatingTo: "{lang} \uBC88\uC5ED \uC911"
+    },
+    model: {
+      tier: {
+        fastCheap: "\uBE60\uB984/\uC800\uB834",
+        fast: "\uBE60\uB984",
+        balanced: "\uADE0\uD615",
+        recommended: "\uAD8C\uC7A5",
+        highQuality: "\uACE0\uD488\uC9C8"
+      }
+    },
+    langNames: {
+      \uD55C\uAD6D\uC5B4: "\uD55C\uAD6D\uC5B4",
+      \u65E5\u672C\u8A9E: "\uC77C\uBCF8\uC5B4",
+      \u4E2D\u6587: "\uC911\uAD6D\uC5B4"
+    }
+  };
+
   // content.src.js
+  setCatalogs({ en: en_default, ko: ko_default });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes[STORAGE_KEYS.ENABLED]) {
@@ -802,6 +1007,10 @@
     if (changes[STORAGE_KEYS.TARGET_LANG]) {
       setActiveLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
       setBadgeLang(changes[STORAGE_KEYS.TARGET_LANG].newValue);
+    }
+    if (changes[STORAGE_KEYS.UI_LANG]) {
+      setLocale(changes[STORAGE_KEYS.UI_LANG].newValue);
+      setBadgeLang();
     }
     const hasStyleChange = Object.keys(changes).some((k) => STYLE_CHANGE_KEYS.has(k));
     if (hasStyleChange) {
@@ -826,7 +1035,8 @@
   loadStyle().then(async () => {
     console.log("[UdemyTranslator] style loaded, initializing...");
     updateDynamicStyles();
-    const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG]);
+    const s = await chrome.storage.local.get([STORAGE_KEYS.ENABLED, STORAGE_KEYS.TARGET_LANG, STORAGE_KEYS.UI_LANG]);
+    setLocale(s[STORAGE_KEYS.UI_LANG]);
     setActiveLang(s[STORAGE_KEYS.TARGET_LANG]);
     setBadgeLang(s[STORAGE_KEYS.TARGET_LANG]);
     setBadgeEnabled(s[STORAGE_KEYS.ENABLED]);
