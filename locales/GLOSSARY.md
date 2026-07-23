@@ -15,7 +15,7 @@
 - **브랜드/고유명사**: `Claude`, `Claude Code`, `Gemini`, `Anthropic`, `Google`, `Udemy`
 - **모델명**: `Haiku 4.5`, `Sonnet 5`, `Opus 4.8`, `Flash-Lite 3.1`, `Flash 3.5`, `3.1 Pro` (등급 설명어 `fast/balanced/…`는 번역 대상 — §3 참고)
 - **기술어**: `API`(약어), `URL`, `VTT`, `node`, `proxy-server/server.js` 같은 명령/경로
-- **언어 선택기 엔도님**: `English`, `한국어`, `日本語`, `中文` — 언어 자기 이름은 **어느 UI 언어에서도 그대로**(번역 대상 언어 드롭다운 `#targetLang`, 화면 언어 드롭다운 `#uiLang`의 옵션 라벨).
+- **언어 선택기 엔도님**: `English`, `한국어`, `日本語`, `中文` — 언어 자기 이름은 **어느 UI 언어에서도 그대로**(번역 대상 언어 드롭다운 `#targetLang`, 화면 언어 드롭다운 `#uiLang`의 옵션 라벨). `targetLang` 저장값은 코드(`en`/`ko`/`ja`/`zh`)이며, 화면에는 그 코드의 엔도님을 표시한다.
 - **플레이스홀더 토큰**: `{count}` `{total}` `{selected}` `{provider}` `{lang}` — 번역·변형 금지, **위치만** 언어 어순에 맞게 이동.
 - **기호**: `✓`, `·`(가운뎃점), `...`(말줄임)
 
@@ -86,7 +86,7 @@
 
 - `{param}` 토큰은 **그대로 유지**, 어순에 따라 위치만 이동. 예: 영어 `{count} subtitles` ↔ 한국어 `{count}개 자막`(수사+분류사+명사).
 - 키 구조는 **중첩 dot 키** 그대로. 새 언어는 `en.json`을 복제해 **값만** 교체(키·중첩·토큰·기호 보존).
-- `langNames`는 "번역 대상 언어 엔도님 → 해당 UI 언어로의 표시명" 맵이다(배지용). 예: en에선 `한국어→Korean`, ko에선 `한국어→한국어`. 새 UI 언어 파일도 이 세 키(`한국어`/`日本語`/`中文`)에 그 언어로의 표시명을 넣어야 배지가 옳게 나온다.
+- 배지의 언어명은 카탈로그가 아니라 `Intl.DisplayNames`로 파생한다 — `languageName(targetCode, uiLocale)`(`src/shared/language-name.js`)가 목표 언어 코드를 현재 UI 로케일 기준 표시명으로 변환한다(예: `languageName('ko', 'en')` → `Korean`, `languageName('ko', 'ko')` → `한국어`). 카탈로그에는 `langNames` 매핑이 **없다** — 새 UI 언어를 추가해도 이 표시명을 위해 카탈로그를 수정할 필요가 없다(브라우저의 `Intl.DisplayNames` 로케일 지원 범위를 따른다).
 
 ---
 
@@ -100,7 +100,7 @@
 
 ## 7. 새 언어 추가 체크리스트 (SDD 태스크로 실행 권장)
 
-1. `en.json` → `locales/<lang>.json` 복제, 이 문서 기준으로 **값만** 번역(키·토큰·기호·`langNames` 세 키 유지).
+1. `en.json` → `locales/<lang>.json` 복제, 이 문서 기준으로 **값만** 번역(키·토큰·기호 보존, `langNames` 없음).
 2. `popup.js`에 import(attributes) 추가 + `content.src.js`에 import(plain) 추가 → 양쪽 `setCatalogs({ en, ko, <lang> })`.
 3. `popup.html`의 `<select id="uiLang">`에 `<option value="<lang>">{엔도님}</option>` 추가(엔도님은 번역 금지).
 4. `content.src.js` 변경 시 `npx esbuild content.src.js --bundle --outfile=content.js`로 재번들.

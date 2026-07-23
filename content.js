@@ -400,6 +400,9 @@
   function setLocale(loc) {
     locale = loc && catalogs[loc] ? loc : "en";
   }
+  function getLocale() {
+    return locale;
+  }
   function lookup(catalog, key) {
     if (!catalog) return void 0;
     return key.split(".").reduce((o, k) => o == null ? void 0 : o[k], catalog);
@@ -414,17 +417,23 @@
     return val;
   }
 
+  // src/shared/language-name.js
+  function languageName(targetCode, uiCode) {
+    try {
+      return new Intl.DisplayNames([uiCode], { type: "language" }).of(targetCode) || targetCode;
+    } catch {
+      return targetCode;
+    }
+  }
+
   // src/presentation/content/badge-manager.js
   var MARK_SVG = '<svg viewBox="0 0 100 100" aria-hidden="true"><rect x="4" y="4" width="92" height="92" rx="26" fill="#8B3DF5"/><path d="M31 26 L31 52 A19 19 0 0 0 69 52 L69 26" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><rect x="30" y="74" width="40" height="9" rx="4.5" fill="#fff"/><rect x="30" y="74" width="15" height="9" rx="4.5" fill="#3DF5C8"/></svg>';
   var badgeEl = null;
   var anchorEl = null;
-  var lang = "\uD55C\uAD6D\uC5B4";
+  var lang = DEFAULT_TARGET_CODE;
   var enabled = true;
   function badgeText() {
-    const nameKey = "langNames." + lang;
-    const name = t(nameKey);
-    const display = name === nameKey ? lang : name;
-    return t("badge.translatingTo", { lang: display });
+    return t("badge.translatingTo", { lang: languageName(lang, getLocale()) });
   }
   function build() {
     const el = document.createElement("div");
@@ -913,11 +922,6 @@
         recommended: "recommended",
         highQuality: "high quality"
       }
-    },
-    langNames: {
-      \uD55C\uAD6D\uC5B4: "Korean",
-      \u65E5\u672C\u8A9E: "Japanese",
-      \u4E2D\u6587: "Chinese"
     }
   };
 
@@ -1002,11 +1006,6 @@
         recommended: "\uAD8C\uC7A5",
         highQuality: "\uACE0\uD488\uC9C8"
       }
-    },
-    langNames: {
-      \uD55C\uAD6D\uC5B4: "\uD55C\uAD6D\uC5B4",
-      \u65E5\u672C\u8A9E: "\uC77C\uBCF8\uC5B4",
-      \u4E2D\u6587: "\uC911\uAD6D\uC5B4"
     }
   };
 
@@ -1091,11 +1090,6 @@
         recommended: "\u63A8\u5968",
         highQuality: "\u9AD8\u54C1\u8CEA"
       }
-    },
-    langNames: {
-      \uD55C\uAD6D\uC5B4: "\u97D3\u56FD\u8A9E",
-      \u65E5\u672C\u8A9E: "\u65E5\u672C\u8A9E",
-      \u4E2D\u6587: "\u4E2D\u56FD\u8A9E"
     }
   };
 

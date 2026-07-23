@@ -3,7 +3,9 @@
  * 캡션 오버레이가 나타날 때 표시하고, 비활성/네비게이션 시 정리한다.
  */
 
-import { t } from '../../shared/i18n.js';
+import { t, getLocale } from '../../shared/i18n.js';
+import { languageName } from '../../shared/language-name.js';
+import { DEFAULT_TARGET_CODE } from '../../domain/languages.js';
 
 const MARK_SVG =
   '<svg viewBox="0 0 100 100" aria-hidden="true">' +
@@ -15,15 +17,11 @@ const MARK_SVG =
 
 let badgeEl = null;
 let anchorEl = null;
-let lang = '한국어';
+let lang = DEFAULT_TARGET_CODE;
 let enabled = true;
 
 function badgeText() {
-  const nameKey = 'langNames.' + lang;
-  const name = t(nameKey);
-  // t()가 키를 그대로 돌려주면(미매핑) 원본 엔도님 사용
-  const display = name === nameKey ? lang : name;
-  return t('badge.translatingTo', { lang: display });
+  return t('badge.translatingTo', { lang: languageName(lang, getLocale()) });
 }
 
 function build() {
