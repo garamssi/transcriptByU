@@ -4,11 +4,12 @@
  * 목표 언어와 자막 언어가 같으면(예: 한국어 자막 → 한국어 번역) 번역을 건너뛰기 위한
  * 판정. 번역 API 호출을 아끼고, 같은 언어를 굳이 재작성해 자막이 어색해지는 것을 막는다.
  *
- * 지원 목표 언어: languages.js 레지스트리에 등록된 코드(en/ko/ja/zh).
- * 그 외(미지원) 목표 언어는 항상 번역 대상으로 본다.
+ * 지원 목표 언어: languages.js 레지스트리에 등록된 코드.
+ * 그 외(미지원) 목표 언어, 그리고 스크립트가 여러 언어에 걸쳐 모호한 목표 언어
+ * (예: latin — en/es/pt/fr/de/id)는 항상 번역 대상으로 본다(스킵하지 않음).
  */
 
-import { scriptOf } from './languages.js';
+import { scriptOf, isDistinctiveScript } from './languages.js';
 
 const RE_HANGUL = /\p{Script=Hangul}/u;
 const RE_KANA = /\p{Script=Hiragana}|\p{Script=Katakana}/u;
@@ -51,6 +52,6 @@ export function isAlreadyTargetLanguage(text, targetCode, sourceCode) {
   if (!text) return false;
   if (sourceCode && sourceCode === targetCode) return true; // 원본 코드가 알려졌고 목표와 같으면 정확 스킵
   const expected = scriptOf(targetCode);
-  if (!expected) return false; // 미지원 코드 → 항상 번역
+  if (!expected || !isDistinctiveScript(expected)) return false; // 미지원 코드이거나, 스크립트가 여러 언어에 걸쳐 모호하면(예: latin: en/es/pt/fr/de/id) 절대 스킵하지 않음
   return dominantScript(text) === expected;
 }

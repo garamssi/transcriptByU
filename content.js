@@ -165,12 +165,26 @@
     en: { code: "en", endonym: "English", englishName: "English", script: "latin" },
     ko: { code: "ko", endonym: "\uD55C\uAD6D\uC5B4", englishName: "Korean", script: "hangul" },
     ja: { code: "ja", endonym: "\u65E5\u672C\u8A9E", englishName: "Japanese", script: "japanese" },
-    zh: { code: "zh", endonym: "\u4E2D\u6587", englishName: "Chinese", script: "chinese" }
+    zh: { code: "zh", endonym: "\u4E2D\u6587", englishName: "Chinese", script: "chinese" },
+    es: { code: "es", endonym: "Espa\xF1ol", englishName: "Spanish", script: "latin" },
+    pt: { code: "pt", endonym: "Portugu\xEAs", englishName: "Portuguese", script: "latin" },
+    fr: { code: "fr", endonym: "Fran\xE7ais", englishName: "French", script: "latin" },
+    de: { code: "de", endonym: "Deutsch", englishName: "German", script: "latin" },
+    ru: { code: "ru", endonym: "\u0420\u0443\u0441\u0441\u043A\u0438\u0439", englishName: "Russian", script: "cyrillic" },
+    ar: { code: "ar", endonym: "\u0627\u0644\u0639\u0631\u0628\u064A\u0629", englishName: "Arabic", script: "arabic" },
+    hi: { code: "hi", endonym: "\u0939\u093F\u0928\u094D\u0926\u0940", englishName: "Hindi", script: "devanagari" },
+    id: { code: "id", endonym: "Bahasa Indonesia", englishName: "Indonesian", script: "latin" }
   };
   var DEFAULT_TARGET_CODE = "ko";
   var ENDONYM_TO_CODE = { "English": "en", "\uD55C\uAD6D\uC5B4": "ko", "\u65E5\u672C\u8A9E": "ja", "\u4E2D\u6587": "zh" };
   function scriptOf(code) {
     return LANGUAGES[code]?.script || null;
+  }
+  function isDistinctiveScript(script) {
+    if (!script) return false;
+    let n = 0;
+    for (const l of Object.values(LANGUAGES)) if (l.script === script) n++;
+    return n === 1;
   }
   function resolveCode(value, fallback = DEFAULT_TARGET_CODE) {
     if (!value) return fallback;
@@ -211,7 +225,7 @@
     if (!text) return false;
     if (sourceCode && sourceCode === targetCode) return true;
     const expected = scriptOf(targetCode);
-    if (!expected) return false;
+    if (!expected || !isDistinctiveScript(expected)) return false;
     return dominantScript(text) === expected;
   }
 
