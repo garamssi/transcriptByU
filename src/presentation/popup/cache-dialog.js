@@ -1,4 +1,5 @@
 import { escapeHtml } from '../../shared/utils.js';
+import { t } from '../../shared/i18n.js';
 
 /**
  * 캐시 관리 다이얼로그를 초기화한다.
@@ -19,8 +20,8 @@ export function initCacheDialog({
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   const cmp = (a, b) => collator.compare(a || '', b || '');
   const attr = (s) => escapeHtml(s).replace(/"/g, '&quot;');
-  const courseOf = (it) => it.course || '(코스 미상)';
-  const sectionOf = (it) => it.section || '(섹션 없음)';
+  const courseOf = (it) => it.course || t('cache.noCourse');
+  const sectionOf = (it) => it.section || t('cache.noSection');
 
   const chevron = '<svg class="cache-row-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>';
   const trashSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>';
@@ -37,7 +38,7 @@ export function initCacheDialog({
 
   async function openCacheDialog() {
     cacheDialogOverlay.classList.add('open');
-    cacheList.innerHTML = '<div class="cache-empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>로딩 중...</div>';
+    cacheList.innerHTML = '<div class="cache-empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' + t('cache.loading') + '</div>';
     view = { level: 'courses', course: null, section: null };
     query = '';
     if (cacheSearch) cacheSearch.value = '';
@@ -81,13 +82,13 @@ export function initCacheDialog({
     cacheBadge.textContent = cacheItems.length > 0 ? cacheItems.length : '';
 
     if (cacheItems.length === 0) {
-      cacheList.innerHTML = '<div class="cache-empty"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>캐시가 비어 있습니다</div>';
+      cacheList.innerHTML = '<div class="cache-empty"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>' + t('cache.empty') + '</div>';
       cacheDeleteAll.disabled = true;
       cacheSelectAll.checked = false;
       cacheSelectAll.disabled = true;
       cacheDeleteSelected.disabled = true;
       if (cacheSearch) cacheSearch.disabled = true;
-      cacheCount.textContent = '0개 항목';
+      cacheCount.textContent = t('cache.count', { total: 0 });
       return;
     }
     cacheDeleteAll.disabled = false;
@@ -135,11 +136,11 @@ export function initCacheDialog({
       cmp(courseOf(a), courseOf(b)) || cmp(sectionOf(a), sectionOf(b)) || cmp(a.lecture, b.lecture));
 
     if (results.length === 0) {
-      return '<div class="cache-empty"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>검색 결과가 없습니다</div>';
+      return '<div class="cache-empty"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>' + t('cache.noResults') + '</div>';
     }
 
     return results.map(item => {
-      const title = item.lecture || '(제목 없음)';
+      const title = item.lecture || t('cache.noTitle');
       const path = `${courseOf(item)} › ${sectionOf(item)}`;
       const tip = `${path} › ${title}`;
       return `
@@ -149,18 +150,18 @@ export function initCacheDialog({
           <div class="cache-item-lecture">${highlight(title, query)}</div>
           <div class="cache-item-path">${highlight(path, query)}</div>
           <div class="cache-item-meta">
-            <span class="cache-item-tag">${item.count}개 자막</span>
+            <span class="cache-item-tag">${t('cache.subtitleCount', { count: item.count })}</span>
             <span class="cache-item-tag">${escapeHtml(item.lang)}</span>
           </div>
         </div>
-        <button class="cache-item-del" data-key="${attr(item.key)}" title="이 레슨 캐시 삭제">${trashSvg}</button>
+        <button class="cache-item-del" data-key="${attr(item.key)}" title="${t('cache.delLesson')}">${trashSvg}</button>
       </div>`;
     }).join('');
   }
 
   function navBar(crumb) {
     return `<div class="cache-nav">
-      <button class="cache-back">${backSvg}<span>뒤로</span></button>
+      <button class="cache-back">${backSvg}<span>${t('cache.back')}</span></button>
       <span class="cache-breadcrumb" title="${attr(crumb)}">${escapeHtml(crumb)}</span>
     </div>`;
   }
@@ -171,7 +172,7 @@ export function initCacheDialog({
         <input type="checkbox" class="cache-check" data-course="${attr(course)}" />
         <span class="cache-row-title">${escapeHtml(course)}</span>
         <span class="cache-group-count">${countInCourse(course)}</span>
-        ${trashBtn(`data-course="${attr(course)}"`, '이 코스 캐시 전체 삭제')}
+        ${trashBtn(`data-course="${attr(course)}"`, t('cache.delCourse'))}
         ${chevron}
       </div>`).join('');
   }
@@ -183,7 +184,7 @@ export function initCacheDialog({
         <input type="checkbox" class="cache-check" data-course="${attr(view.course)}" data-section="${attr(section)}" />
         <span class="cache-row-title">${escapeHtml(section)}</span>
         <span class="cache-group-count">${countInSection(view.course, section)}</span>
-        ${trashBtn(`data-course="${attr(view.course)}" data-section="${attr(section)}"`, '이 섹션 캐시 삭제')}
+        ${trashBtn(`data-course="${attr(view.course)}" data-section="${attr(section)}"`, t('cache.delSection'))}
         ${chevron}
       </div>`).join('');
     return html;
@@ -192,18 +193,18 @@ export function initCacheDialog({
   function renderLectures() {
     let html = navBar(`${view.course} › ${view.section}`);
     html += lecturesIn(view.course, view.section).map(item => {
-      const title = item.lecture || '(제목 없음)';
+      const title = item.lecture || t('cache.noTitle');
       return `
       <div class="cache-item" data-key="${attr(item.key)}">
         <input type="checkbox" class="cache-check" data-key="${attr(item.key)}" />
         <div class="cache-item-content">
           <div class="cache-item-lecture">${escapeHtml(title)}</div>
           <div class="cache-item-meta">
-            <span class="cache-item-tag">${item.count}개 자막</span>
+            <span class="cache-item-tag">${t('cache.subtitleCount', { count: item.count })}</span>
             <span class="cache-item-tag">${escapeHtml(item.lang)}</span>
           </div>
         </div>
-        <button class="cache-item-del" data-key="${attr(item.key)}" title="이 레슨 캐시 삭제">${trashSvg}</button>
+        <button class="cache-item-del" data-key="${attr(item.key)}" title="${t('cache.delLesson')}">${trashSvg}</button>
       </div>`;
     }).join('');
     return html;
@@ -235,7 +236,7 @@ export function initCacheDialog({
     const selected = getCheckedKeys().length;
     cacheDeleteSelected.disabled = selected === 0;
     cacheSelectAll.checked = boxes > 0 && checkedBoxes === boxes;
-    cacheCount.textContent = selected > 0 ? `${selected}개 선택 / 전체 ${total}개` : `${total}개 항목`;
+    cacheCount.textContent = selected > 0 ? t('cache.selectedCount', { selected, total }) : t('cache.count', { total });
   }
 
   async function deleteKeys(keys) {
