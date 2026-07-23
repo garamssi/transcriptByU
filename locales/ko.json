@@ -1,0 +1,85 @@
+{
+  "popup": {
+    "subtitle": "실시간 자막 번역",
+    "statusWaiting": "대기 중",
+    "toggleTitle": "번역 활성화/비활성화",
+    "aiProvider": "AI 제공자",
+    "selected": "✓ 선택됨",
+    "apiKey": "API 키",
+    "showPassword": "비밀번호 표시",
+    "proxyUrl": "프록시 서버 URL",
+    "save": "저장",
+    "saved": "저장 완료!",
+    "retranslate": "재번역",
+    "retranslating": "재번역 중...",
+    "retranslateDone": "{count}건 재번역 완료!",
+    "openUdemy": "Udemy 페이지를 열어주세요",
+    "statusChecking": "{provider} 연결 확인 중...",
+    "statusReady": "{provider} 준비됨",
+    "statusNotRunning": "{provider} 미실행 — 터미널에서 node proxy-server/server.js 실행 필요",
+    "statusNeedKey": "{provider} API 키를 입력하세요"
+  },
+  "settings": {
+    "model": "모델",
+    "targetLang": "번역 언어",
+    "displayMode": "표시 모드",
+    "uiLang": "화면 언어"
+  },
+  "displayModeOptions": {
+    "translation": "번역만",
+    "both": "원본 + 번역 (동시)",
+    "original": "원본만"
+  },
+  "style": {
+    "heading": "번역 자막 스타일",
+    "fontSize": "글자 크기",
+    "fontColor": "글자 색상",
+    "bgColor": "배경 색상",
+    "bgOpacity": "배경 투명도",
+    "panelColor": "패널 글자색",
+    "use": "사용",
+    "none": "없음",
+    "udemyDefault": "유데미 기본",
+    "preview": "미리보기",
+    "previewText": "번역된 자막 미리보기"
+  },
+  "cache": {
+    "title": "캐시",
+    "manage": "캐시 관리",
+    "savedSubtitles": "저장된 번역 자막",
+    "search": "제목 검색 (코스·섹션·레슨)",
+    "selectAll": "전체 선택",
+    "deleteSelected": "선택 삭제",
+    "deleteAll": "전체 삭제",
+    "loading": "로딩 중...",
+    "empty": "캐시가 비어 있습니다",
+    "noResults": "검색 결과가 없습니다",
+    "back": "뒤로",
+    "count": "{total}개 항목",
+    "selectedCount": "{selected}개 선택 / 전체 {total}개",
+    "subtitleCount": "{count}개 자막",
+    "noCourse": "(코스 미상)",
+    "noSection": "(섹션 없음)",
+    "noTitle": "(제목 없음)",
+    "delCourse": "이 코스 캐시 전체 삭제",
+    "delSection": "이 섹션 캐시 삭제",
+    "delLesson": "이 레슨 캐시 삭제"
+  },
+  "badge": {
+    "translatingTo": "{lang} 번역 중"
+  },
+  "model": {
+    "tier": {
+      "fastCheap": "빠름/저렴",
+      "fast": "빠름",
+      "balanced": "균형",
+      "recommended": "권장",
+      "highQuality": "고품질"
+    }
+  },
+  "langNames": {
+    "한국어": "한국어",
+    "日本語": "일본어",
+    "中文": "중국어"
+  }
+}

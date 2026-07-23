@@ -1,0 +1,85 @@
+{
+  "popup": {
+    "subtitle": "Live subtitle translation",
+    "statusWaiting": "Waiting",
+    "toggleTitle": "Enable/disable translation",
+    "aiProvider": "AI Provider",
+    "selected": "✓ Selected",
+    "apiKey": "API Key",
+    "showPassword": "Show password",
+    "proxyUrl": "Proxy server URL",
+    "save": "Save",
+    "saved": "Saved!",
+    "retranslate": "Re-translate",
+    "retranslating": "Re-translating...",
+    "retranslateDone": "{count} re-translated!",
+    "openUdemy": "Please open a Udemy course page",
+    "statusChecking": "{provider} — checking connection...",
+    "statusReady": "{provider} ready",
+    "statusNotRunning": "{provider} not running — run `node proxy-server/server.js` in a terminal",
+    "statusNeedKey": "Enter your {provider} API key"
+  },
+  "settings": {
+    "model": "Model",
+    "targetLang": "Translation",
+    "displayMode": "Display",
+    "uiLang": "Language"
+  },
+  "displayModeOptions": {
+    "translation": "Translation only",
+    "both": "Original + Translation",
+    "original": "Original only"
+  },
+  "style": {
+    "heading": "Subtitle style",
+    "fontSize": "Font size",
+    "fontColor": "Text color",
+    "bgColor": "Background color",
+    "bgOpacity": "Background opacity",
+    "panelColor": "Panel text color",
+    "use": "On",
+    "none": "None",
+    "udemyDefault": "Udemy default",
+    "preview": "Preview",
+    "previewText": "Translated subtitle preview"
+  },
+  "cache": {
+    "title": "Cache",
+    "manage": "Manage cache",
+    "savedSubtitles": "Saved translations",
+    "search": "Search title (course · section · lesson)",
+    "selectAll": "Select all",
+    "deleteSelected": "Delete selected",
+    "deleteAll": "Delete all",
+    "loading": "Loading...",
+    "empty": "Cache is empty",
+    "noResults": "No results",
+    "back": "Back",
+    "count": "{total} items",
+    "selectedCount": "{selected} selected / {total} total",
+    "subtitleCount": "{count} subtitles",
+    "noCourse": "(unknown course)",
+    "noSection": "(no section)",
+    "noTitle": "(untitled)",
+    "delCourse": "Delete all cache for this course",
+    "delSection": "Delete cache for this section",
+    "delLesson": "Delete cache for this lesson"
+  },
+  "badge": {
+    "translatingTo": "Translating to {lang}"
+  },
+  "model": {
+    "tier": {
+      "fastCheap": "fast / cheap",
+      "fast": "fast",
+      "balanced": "balanced",
+      "recommended": "recommended",
+      "highQuality": "high quality"
+    }
+  },
+  "langNames": {
+    "한국어": "Korean",
+    "日本語": "Japanese",
+    "中文": "Chinese"
+  }
+}
