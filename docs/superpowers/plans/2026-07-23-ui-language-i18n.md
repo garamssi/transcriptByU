@@ -1117,8 +1117,9 @@ find "$STAGE" -name "*.test.*" -delete
 
 - [ ] **Step 3: 전체 테스트 스위트 실행**
 
-Run: `node --test tests/`
-Expected: 모든 파일 PASS, `# fail 0`
+Run: `node --test`
+Expected: 모든 파일 PASS, `# fail 0` (feature 테스트 12 + proxy-server 6 = 18).
+> 주의: 이 Node(22.19)에서 `node --test tests/`(디렉토리 인자)는 오작동한다(`# fail 1`). 인자 없는 `node --test`(cwd 재귀 탐색)를 쓴다. feature 테스트만 돌리려면 `node --test tests/*.mjs tests/*.js`.
 
 - [ ] **Step 4: 대상 파일 잔존 한글 리터럴 점검** (주석 제외 육안 확인)
 
