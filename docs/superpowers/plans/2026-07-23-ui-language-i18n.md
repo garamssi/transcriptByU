@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 새 npm 의존성·package.json 추가 금지. 테스트는 Node 내장 `node:test`로 직접 실행.
+- 새 npm 의존성 추가 금지(npm install 불필요 유지). 테스트는 Node 내장 `node:test`로 직접 실행. **유일한 예외**: 의존성 없는 `src/package.json` (`{"type":"module"}`) — Node가 `src/*.js`를 ESM으로 인식해 `.mjs` 테스트 실행 시 `MODULE_TYPELESS_PACKAGE_JSON` 경고를 제거한다(브라우저/esbuild 무영향, `proxy-server` CJS 무영향). **루트** package.json은 금지(넣으면 proxy-server CJS 테스트가 깨짐).
 - `src/` 코드는 ESM(`import`/`export`), 기존 `proxy-server/*.test.js`는 CommonJS. `i18n.js`는 ESM이므로 그 단위테스트는 `.mjs`.
 - `content.js`는 빌드 산출물이다 — `content.src.js` 수정 후 반드시 `npx esbuild content.src.js --bundle --outfile=content.js`로 재번들하고 둘 다 커밋한다.
 - 테스트 파일은 배포 zip에 포함되지 않도록 **최상위 `tests/`** 에 둔다(빌드는 include 방식이라 `tests/`를 복사하지 않음).
