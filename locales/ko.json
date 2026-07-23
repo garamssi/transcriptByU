@@ -17,7 +17,9 @@
     "statusChecking": "{provider} 연결 확인 중...",
     "statusReady": "{provider} 준비됨",
     "statusNotRunning": "{provider} 미실행 — 터미널에서 node proxy-server/server.js 실행 필요",
-    "statusNeedKey": "{provider} API 키를 입력하세요"
+    "statusNeedKey": "{provider} API 키를 입력하세요",
+    "enableOn": "번역 켜짐",
+    "enableOff": "번역 꺼짐"
   },
   "settings": {
     "model": "모델",

@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Udemy AI 번역기",
   "version": "1.3.0",
+  "minimum_chrome_version": "123",
   "description": "Gemini / Claude API를 이용한 Udemy 자막 실시간 번역",
   "permissions": ["storage", "unlimitedStorage", "activeTab"],
   "host_permissions": [

@@ -123,10 +123,6 @@ body {
   letter-spacing: -.01em;
 }
 
-/* 마스터 토글 상태에 따른 헤드라인 (JS 없이 CSS로 반영) */
-.app:has(#enableToggle:checked) #enableLabel::after { content: "번역 켜짐"; }
-.app:has(#enableToggle:not(:checked)) #enableLabel::after { content: "번역 꺼짐"; }
-
 .hero-status-line {
   display: flex;
   align-items: center;

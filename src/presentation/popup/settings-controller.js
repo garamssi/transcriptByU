@@ -18,6 +18,7 @@ export async function initSettingsController($, updatePreview) {
   const saveKeyText = $('saveKeyText');
   const saveStatus = $('saveStatus');
   const enableToggle = $('enableToggle');
+  const enableLabel = $('enableLabel');
   const modelSelect = $('model');
   const targetLangSelect = $('targetLang');
   const displayModeSelect = $('displayMode');
@@ -67,6 +68,7 @@ export async function initSettingsController($, updatePreview) {
   if (stored[STORAGE_KEYS.GEMINI_API_KEY]) geminiApiKeyInput.value = stored[STORAGE_KEYS.GEMINI_API_KEY];
   claudeCodeUrlInput.value = stored[STORAGE_KEYS.CLAUDE_CODE_URL] || 'http://localhost:3456';
   enableToggle.checked = stored[STORAGE_KEYS.ENABLED] !== false;
+  updateEnableLabel();
   if (stored[STORAGE_KEYS.TARGET_LANG]) targetLangSelect.value = stored[STORAGE_KEYS.TARGET_LANG];
   if (stored[STORAGE_KEYS.DISPLAY_MODE]) displayModeSelect.value = stored[STORAGE_KEYS.DISPLAY_MODE];
 
@@ -219,6 +221,7 @@ export async function initSettingsController($, updatePreview) {
 
   enableToggle.addEventListener('change', async () => {
     await chrome.storage.local.set({ [STORAGE_KEYS.ENABLED]: enableToggle.checked });
+    updateEnableLabel();
   });
 
   modelSelect.addEventListener('change', async () => {
@@ -244,6 +247,7 @@ export async function initSettingsController($, updatePreview) {
     updateStatus();                                        // 상태 문구
     updateBgVisibility();                                  // 배경 hex/None
     updatePanelColorHex();                                 // 패널색 hex/기본
+    updateEnableLabel();                                   // 마스터 토글 헤드라인
   });
 
   // 스타일 컨트롤
@@ -321,6 +325,10 @@ export async function initSettingsController($, updatePreview) {
   });
 
   // === 헬퍼 ===
+
+  function updateEnableLabel() {
+    enableLabel.textContent = t(enableToggle.checked ? 'popup.enableOn' : 'popup.enableOff');
+  }
 
   function updateBgVisibility() {
     const on = bgEnabledCheck.checked;

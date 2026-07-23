@@ -17,7 +17,9 @@
     "statusChecking": "{provider} — checking connection...",
     "statusReady": "{provider} ready",
     "statusNotRunning": "{provider} not running — run `node proxy-server/server.js` in a terminal",
-    "statusNeedKey": "Enter your {provider} API key"
+    "statusNeedKey": "Enter your {provider} API key",
+    "enableOn": "Translation on",
+    "enableOff": "Translation off"
   },
   "settings": {
     "model": "Model",
