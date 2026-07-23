@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <link rel="stylesheet" href="fonts.css" />
@@ -30,7 +30,7 @@
         <svg class="hero-mark"><use href="#pmark" /></svg>
         <div class="hero-titles">
           <h1>Udemy Live Translator</h1>
-          <p class="header-sub">실시간 자막 번역</p>
+          <p class="header-sub" data-i18n="popup.subtitle"></p>
         </div>
       </div>
 
@@ -42,11 +42,11 @@
           <div class="hero-status-title" id="enableLabel"></div>
           <div class="hero-status-line">
             <span class="status-dot" id="statusDot"></span>
-            <span id="statusText">대기 중</span>
+            <span id="statusText" data-i18n="popup.statusWaiting"></span>
           </div>
           <span class="lecture-info" id="lectureInfo"></span>
         </div>
-        <label class="master-toggle" title="번역 활성화/비활성화">
+        <label class="master-toggle" data-i18n-title="popup.toggleTitle">
           <input type="checkbox" id="enableToggle" checked />
           <span class="master-slider"></span>
         </label>
@@ -57,31 +57,31 @@
     <div class="sheet">
       <!-- AI 제공자 -->
       <section class="block">
-        <div class="block-label">AI 제공자</div>
+        <div class="block-label" data-i18n="popup.aiProvider"></div>
         <div class="provider-tabs">
           <button class="provider-tab active" data-provider="claude-code">
             <span class="provider-name">Claude Code</span>
             <span class="provider-company">Local CLI</span>
-            <span class="provider-check">✓ 선택됨</span>
+            <span class="provider-check" data-i18n="popup.selected"></span>
           </button>
           <button class="provider-tab" data-provider="gemini">
             <span class="provider-name">Gemini</span>
             <span class="provider-company">Google</span>
-            <span class="provider-check">✓ 선택됨</span>
+            <span class="provider-check" data-i18n="popup.selected"></span>
           </button>
           <button class="provider-tab" data-provider="claude">
             <span class="provider-name">Claude</span>
             <span class="provider-company">Anthropic</span>
-            <span class="provider-check">✓ 선택됨</span>
+            <span class="provider-check" data-i18n="popup.selected"></span>
           </button>
         </div>
 
         <!-- Claude API Key -->
         <div class="provider-panel hidden" id="claudePanel">
-          <label for="claudeApiKey" class="form-label">API Key</label>
+          <label for="claudeApiKey" class="form-label" data-i18n="popup.apiKey"></label>
           <div class="input-group">
             <input type="password" id="claudeApiKey" placeholder="sk-ant-api03-..." />
-            <button class="icon-btn toggle-vis-btn" data-target="claudeApiKey" title="비밀번호 표시">
+            <button class="icon-btn toggle-vis-btn" data-target="claudeApiKey" data-i18n-title="popup.showPassword">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
@@ -89,10 +89,10 @@
 
         <!-- Gemini API Key -->
         <div class="provider-panel hidden" id="geminiPanel">
-          <label for="geminiApiKey" class="form-label">API Key</label>
+          <label for="geminiApiKey" class="form-label" data-i18n="popup.apiKey"></label>
           <div class="input-group">
             <input type="password" id="geminiApiKey" placeholder="AIzaSy..." />
-            <button class="icon-btn toggle-vis-btn" data-target="geminiApiKey" title="비밀번호 표시">
+            <button class="icon-btn toggle-vis-btn" data-target="geminiApiKey" data-i18n-title="popup.showPassword">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
@@ -100,14 +100,14 @@
 
         <!-- Claude Code URL -->
         <div class="provider-panel" id="claudeCodePanel">
-          <label for="claudeCodeUrl" class="form-label">프록시 서버 URL</label>
+          <label for="claudeCodeUrl" class="form-label" data-i18n="popup.proxyUrl"></label>
           <div class="input-group">
             <input type="text" id="claudeCodeUrl" placeholder="http://localhost:3456" />
           </div>
         </div>
 
         <button id="saveKey" class="btn-save">
-          <span id="saveKeyText">저장</span>
+          <span id="saveKeyText" data-i18n="popup.save"></span>
           <span id="saveStatus" class="save-status"></span>
         </button>
       </section>
@@ -116,7 +116,7 @@
       <div class="setting-cards">
         <div class="setting-card">
           <span class="setting-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B26BFF" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 2v10l7 3"/></svg></span>
-          <span class="setting-label">모델</span>
+          <span class="setting-label" data-i18n="settings.model"></span>
           <div class="setting-select">
             <select id="model"><!-- provider별 JS 렌더 --></select>
             <svg class="chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
@@ -125,7 +125,7 @@
 
         <div class="setting-card">
           <span class="setting-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B26BFF" stroke-width="2"><path d="M5 8h14M5 8a2 2 0 0 1 0-4h9M9 8v13"/><path d="m13 21 4-9 4 9M14.5 17h5"/></svg></span>
-          <span class="setting-label">번역 언어</span>
+          <span class="setting-label" data-i18n="settings.targetLang"></span>
           <div class="setting-select">
             <select id="targetLang">
               <option value="한국어">한국어</option>
@@ -138,12 +138,24 @@
 
         <div class="setting-card">
           <span class="setting-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B26BFF" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 15h8M6 11h4"/></svg></span>
-          <span class="setting-label">표시 모드</span>
+          <span class="setting-label" data-i18n="settings.displayMode"></span>
           <div class="setting-select">
             <select id="displayMode">
-              <option value="translation">번역만</option>
-              <option value="both">원본 + 번역 (동시)</option>
-              <option value="original">원본만</option>
+              <option value="translation" data-i18n="displayModeOptions.translation"></option>
+              <option value="both" data-i18n="displayModeOptions.both"></option>
+              <option value="original" data-i18n="displayModeOptions.original"></option>
+            </select>
+            <svg class="chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+          </div>
+        </div>
+
+        <div class="setting-card">
+          <span class="setting-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B26BFF" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+          <span class="setting-label" data-i18n="settings.uiLang"></span>
+          <div class="setting-select">
+            <select id="uiLang">
+              <option value="en">English</option>
+              <option value="ko">한국어</option>
             </select>
             <svg class="chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
           </div>
@@ -153,7 +165,7 @@
       <!-- 번역 자막 스타일 -->
       <section class="style-block">
         <button class="style-head" id="styleToggle" aria-expanded="false">
-          <span class="style-head-label">번역 자막 스타일</span>
+          <span class="style-head-label" data-i18n="style.heading"></span>
           <span class="style-head-badge" id="fontSizeValue">13px</span>
           <svg class="collapse-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
@@ -162,14 +174,14 @@
           <!-- 글자 크기 -->
           <div class="form-group">
             <div class="form-label-row">
-              <label for="styleFontSize" class="form-label">글자 크기</label>
+              <label for="styleFontSize" class="form-label" data-i18n="style.fontSize"></label>
             </div>
             <input type="range" id="styleFontSize" min="10" max="24" value="13" step="1" />
           </div>
 
           <!-- 글자 색상 -->
           <div class="form-group">
-            <label class="form-label">글자 색상</label>
+            <label class="form-label" data-i18n="style.fontColor"></label>
             <div class="color-row">
               <div class="color-swatch-wrap">
                 <input type="color" id="styleFontColor" value="#ffffff" />
@@ -180,16 +192,16 @@
 
           <!-- 배경 색상 -->
           <div class="form-group">
-            <label class="form-label">배경 색상</label>
+            <label class="form-label" data-i18n="style.bgColor"></label>
             <div class="color-row">
               <div class="color-swatch-wrap">
                 <input type="color" id="styleBgColor" value="#1e293b" />
               </div>
-              <span class="color-hex" id="bgColorHex">없음</span>
+              <span class="color-hex" id="bgColorHex"></span>
               <label class="pill-toggle">
                 <input type="checkbox" id="bgEnabled" />
                 <span class="pill-slider"></span>
-                <span class="pill-label">사용</span>
+                <span class="pill-label" data-i18n="style.use"></span>
               </label>
             </div>
           </div>
@@ -197,7 +209,7 @@
           <!-- 배경 투명도 -->
           <div class="form-group" id="bgOpacityGroup">
             <div class="form-label-row">
-              <label for="styleBgOpacity" class="form-label">배경 투명도</label>
+              <label for="styleBgOpacity" class="form-label" data-i18n="style.bgOpacity"></label>
               <span class="range-badge" id="bgOpacityValue">80%</span>
             </div>
             <input type="range" id="styleBgOpacity" min="0" max="100" value="80" step="5" />
@@ -205,25 +217,25 @@
 
           <!-- 패널 글자색 -->
           <div class="form-group">
-            <label class="form-label">패널 글자색</label>
+            <label class="form-label" data-i18n="style.panelColor"></label>
             <div class="color-row">
               <div class="color-swatch-wrap">
                 <input type="color" id="stylePanelColor" value="#1a1a1a" />
               </div>
-              <span class="color-hex" id="panelColorHex">유데미 기본</span>
+              <span class="color-hex" id="panelColorHex"></span>
               <label class="pill-toggle">
                 <input type="checkbox" id="panelColorEnabled" />
                 <span class="pill-slider"></span>
-                <span class="pill-label">사용</span>
+                <span class="pill-label" data-i18n="style.use"></span>
               </label>
             </div>
           </div>
 
           <!-- 미리보기 -->
           <div class="preview-box">
-            <span class="preview-label">미리보기</span>
+            <span class="preview-label" data-i18n="style.preview"></span>
             <div class="preview-stage">
-              <div id="stylePreview" class="preview-text">번역된 자막 미리보기</div>
+              <div id="stylePreview" class="preview-text" data-i18n="style.previewText"></div>
             </div>
           </div>
         </div>
@@ -233,11 +245,11 @@
       <div class="actions">
         <button id="retranslateBtn" class="btn-retranslate">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          <span id="retranslateText">재번역</span>
+          <span id="retranslateText" data-i18n="popup.retranslate"></span>
         </button>
         <button id="openCacheDialog" class="btn-cache">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-          캐시
+          <span data-i18n="cache.title"></span>
           <span class="cache-badge" id="cacheBadge"></span>
         </button>
       </div>
@@ -252,8 +264,8 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B26BFF" stroke-width="2"><path d="m21 16-9 5-9-5V8l9-5 9 5z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
         </span>
         <div class="dialog-head-titles">
-          <h2>캐시 관리</h2>
-          <p class="dialog-sub">저장된 번역 자막</p>
+          <h2 data-i18n="cache.manage"></h2>
+          <p class="dialog-sub" data-i18n="cache.savedSubtitles"></p>
         </div>
         <button class="dialog-close" id="closeCacheDialog">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -262,17 +274,17 @@
 
       <div class="dialog-search">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input type="search" id="cacheSearch" placeholder="제목 검색 (코스·섹션·레슨)" autocomplete="off" />
+        <input type="search" id="cacheSearch" data-i18n-placeholder="cache.search" autocomplete="off" />
       </div>
 
       <div class="dialog-toolbar">
         <label class="select-all-toggle">
           <input type="checkbox" id="cacheSelectAll" />
-          <span>전체 선택</span>
+          <span data-i18n="cache.selectAll"></span>
         </label>
         <button class="btn-delete" id="cacheDeleteSelected" disabled>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          선택 삭제
+          <span data-i18n="cache.deleteSelected"></span>
         </button>
       </div>
 
@@ -281,8 +293,8 @@
       </div>
 
       <div class="dialog-footer">
-        <span class="cache-count" id="cacheCount">0개</span>
-        <button class="btn-delete-all" id="cacheDeleteAll">전체 삭제</button>
+        <span class="cache-count" id="cacheCount"></span>
+        <button class="btn-delete-all" id="cacheDeleteAll" data-i18n="cache.deleteAll"></button>
       </div>
     </div>
   </div>
