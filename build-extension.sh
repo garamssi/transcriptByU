@@ -41,6 +41,7 @@ mkdir -p "$STAGE"/fonts
 cp fonts/*.woff2 "$STAGE"/fonts/
 # background.js·popup.js 는 번들이 아니라 src/ 를 런타임에 ES 모듈로 로드하므로 src 전체 포함
 cp -R src "$STAGE"/src
+cp -R locales "$STAGE"/locales
 
 echo "▶ manifest 참조 파일 검증…"
 node -e '
@@ -67,6 +68,7 @@ console.log("  ✅ manifest 참조 파일 전부 포함");
 echo "▶ zip 생성…"
 rm -f "$OUT"
 find "$STAGE" -name ".DS_Store" -delete
+find "$STAGE" -name "*.test.*" -delete
 ( cd "$STAGE" && zip -r -X -q "$OUT" . -x "*.DS_Store" )
 
 echo "✅ 완료: $OUT ($(du -h "$OUT" | cut -f1), $(unzip -l "$OUT" | tail -1 | awk '{print $2}') files)"
