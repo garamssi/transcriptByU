@@ -22,7 +22,7 @@ export async function getProviderConfig() {
 
   if (provider === 'gemini') {
     apiKey = stored.geminiApiKey;
-    model = stored.geminiModel || stored.model || 'gemini-3.5-flash';
+    model = stored.geminiModel || stored.model || 'gemini-3.6-flash';
   } else if (provider === 'claude-code') {
     apiKey = stored.claudeCodeUrl || 'http://localhost:3456';
     model = stored.claudeCodeModel || 'claude-sonnet-5';

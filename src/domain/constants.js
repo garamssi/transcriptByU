@@ -68,16 +68,17 @@ export const MODELS = {
   claude: [
     { value: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', tier: 'fastCheap' },
     { value: 'claude-sonnet-5', name: 'Sonnet 5', tier: 'balanced' },
-    { value: 'claude-opus-4-8', name: 'Opus 4.8', tier: 'highQuality' },
+    { value: 'claude-opus-5', name: 'Opus 5', tier: 'highQuality' },
   ],
+  // Gemini는 Flash 계열만 쓴다. Gemini 3 Pro는 GA가 없고 preview뿐이라(무료 티어 없음,
+  // 2주 예고 후 변경 가능) 자막 번역 용도에 맞지 않는다.
   gemini: [
-    { value: 'gemini-3.1-flash-lite', name: 'Flash-Lite 3.1', tier: 'fastCheap' },
-    { value: 'gemini-3.5-flash', name: 'Flash 3.5', tier: 'recommended' },
-    { value: 'gemini-3.1-pro', name: '3.1 Pro', tier: 'highQuality' },
+    { value: 'gemini-3.5-flash-lite', name: 'Flash-Lite 3.5', tier: 'fastCheap' },
+    { value: 'gemini-3.6-flash', name: 'Flash 3.6', tier: 'recommended' },
   ],
   'claude-code': [
     { value: 'claude-sonnet-5', name: 'Sonnet 5', tier: 'fast' },
-    { value: 'claude-opus-4-8', name: 'Opus 4.8', tier: 'highQuality' },
+    { value: 'claude-opus-5', name: 'Opus 5', tier: 'highQuality' },
   ],
 };
 

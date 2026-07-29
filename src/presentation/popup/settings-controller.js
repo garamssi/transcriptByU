@@ -166,6 +166,11 @@ export async function initSettingsController($, updatePreview) {
 
     if (savedModel && models.some(m => m.value === savedModel)) {
       modelSelect.value = savedModel;
+    } else if (savedModel) {
+      // 목록에서 사라진 구버전 모델(예: claude-opus-4-8)이 저장돼 있으면 첫 옵션으로
+      // 정규화해 저장한다. 그러지 않으면 셀렉트는 첫 옵션을 보여주지만 실제 번역 요청은
+      // 계속 폐기된 모델 ID로 나간다.
+      saveProviderModel();
     }
   }
 
