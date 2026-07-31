@@ -16,6 +16,7 @@
 # 제외: content.src.js(빌드 입력), docs·docker·proxy-server, README, *.zip, .git 등
 #
 # 요구: node, npx(esbuild)  — 프로젝트는 esbuild 로 content.js 를 번들한다.
+#       압축은 zip 을 쓰고, 없으면(Windows Git Bash) PowerShell Compress-Archive 로 대체한다.
 
 set -euo pipefail
 
@@ -69,6 +70,15 @@ echo "▶ zip 생성…"
 rm -f "$OUT"
 find "$STAGE" -name ".DS_Store" -delete
 find "$STAGE" -name "*.test.*" -delete
-( cd "$STAGE" && zip -r -X -q "$OUT" . -x "*.DS_Store" )
+if command -v zip >/dev/null 2>&1; then
+  ( cd "$STAGE" && zip -r -X -q "$OUT" . -x "*.DS_Store" )
+else
+  # Windows(Git Bash)에는 zip 이 없다 → PowerShell Compress-Archive 로 대체.
+  towin() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
+  PS="$(command -v pwsh || command -v powershell)" || {
+    echo "→ zip 도 PowerShell 도 없어 압축할 수 없음" >&2; exit 1; }
+  "$PS" -NoProfile -NonInteractive -Command \
+    "Compress-Archive -Path '$(towin "$STAGE")\*' -DestinationPath '$(towin "$OUT")' -Force"
+fi
 
 echo "✅ 완료: $OUT ($(du -h "$OUT" | cut -f1), $(unzip -l "$OUT" | tail -1 | awk '{print $2}') files)"
