@@ -59,6 +59,21 @@ powershell -ExecutionPolicy Bypass -File .\docker\run.ps1
 - 백그라운드(`-d`)로 실행되어 창을 닫아도 서버가 유지되고, 재부팅 시 Docker Desktop과 함께 자동으로 다시 뜹니다.
 - 중지: `docker stop claude-proxy` / 로그: `docker logs -f claude-proxy`
 
+### `exec /usr/local/bin/entrypoint.sh: no such file or directory` 가 반복될 때
+
+컨테이너가 이 오류로 계속 재시작하면, `docker/entrypoint.sh` 가 **CRLF 줄바꿈**으로 체크아웃된
+경우입니다. shebang 이 `/bin/sh\r` 로 읽혀 Linux 가 해당 파일을 못 찾습니다.
+
+저장소에 `.gitattributes`(`*.sh text eol=lf`)와 Dockerfile 의 CR 제거 단계가 들어 있어 새로
+클론하거나 다시 빌드하면 해결됩니다. 이미 CRLF 로 체크아웃된 클론을 쓰고 있다면:
+
+```powershell
+git rm --cached -r .
+git reset --hard          # .gitattributes 규칙으로 재체크아웃
+docker rm -f claude-proxy
+.\docker\run.bat
+```
+
 ### Docker 볼륨 경로 문제 시
 
 `-v "C:\...\credentials.json:/root/.claude/.credentials.json"`에서 마운트가 안 되면, `run.ps1`의 해당 줄을 포워드 슬래시 형식으로 바꿔 시도하세요. 예: `C:\Users\me\...` → `C:/Users/me/...`.

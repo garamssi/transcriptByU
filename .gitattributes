@@ -1,0 +1,28 @@
+# 줄바꿈 정규화 — Windows(core.autocrlf=true) 체크아웃에서 CRLF 가 섞여
+# Linux/macOS 에서 스크립트가 깨지는 것을 막는다.
+#
+# 실제 사고: docker/entrypoint.sh 가 CRLF 로 체크아웃되면 shebang 이 "/bin/sh\r" 이 되고,
+# 컨테이너가 `exec /usr/local/bin/entrypoint.sh: no such file or directory` 로 죽는다.
+
+# 기본: 텍스트는 저장소에 LF 로 보관, 체크아웃은 플랫폼 설정에 맡김
+* text=auto
+
+# Unix 에서 실행/해석되는 파일은 워킹트리에서도 반드시 LF
+*.sh          text eol=lf
+*.command     text eol=lf
+Dockerfile    text eol=lf
+*.mjs         text eol=lf
+*.js          text eol=lf
+*.json        text eol=lf
+*.css         text eol=lf
+*.html        text eol=lf
+*.md          text eol=lf
+
+# Windows 네이티브 스크립트는 CRLF
+*.bat         text eol=crlf
+*.ps1         text eol=crlf
+
+# 바이너리 — 변환 금지
+*.woff2       binary
+*.png         binary
+*.zip         binary

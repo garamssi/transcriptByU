@@ -15,7 +15,11 @@ WORKDIR /app
 # 프록시 서버 소스 (node 내장 모듈만 사용하므로 별도 npm install 불필요)
 COPY proxy-server/ ./proxy-server/
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+# CRLF 방어: Windows 체크아웃(core.autocrlf=true)에서 CRLF 가 섞이면 shebang 이 "/bin/sh\r"
+# 로 깨져 컨테이너가 `exec ...: no such file or directory` 로 죽는다. .gitattributes 로
+# LF 를 강제하지만, 이미 CRLF 로 체크아웃된 기존 클론에서도 빌드가 되도록 여기서 CR 을 지운다.
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh
 
 # claude 인증/설정은 실행 시 볼륨으로 마운트 (아래 run.command 참고)
 #   /root/.claude/.credentials.json  <- 호스트 Keychain 에서 추출한 OAuth 토큰
