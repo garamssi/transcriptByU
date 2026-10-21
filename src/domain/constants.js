@@ -66,19 +66,19 @@ export const STYLE_DEFAULTS = {
 // === Model Options ===
 export const MODELS = {
   claude: [
-    { value: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', tier: 'fastCheap' },
-    { value: 'claude-sonnet-5', name: 'Sonnet 5', tier: 'balanced' },
-    { value: 'claude-opus-5', name: 'Opus 5', tier: 'highQuality' },
+    { value: 'claude-haiku-5-5', name: 'Haiku 5.5', tier: 'fastCheap' },
+    { value: 'claude-sonnet-5-5', name: 'Sonnet 5.5', tier: 'balanced' },
+    { value: 'claude-opus-5-5', name: 'Opus 5.5', tier: 'highQuality' },
   ],
-  // Gemini는 Flash 계열만 쓴다. Gemini 3 Pro는 GA가 없고 preview뿐이라(무료 티어 없음,
-  // 2주 예고 후 변경 가능) 자막 번역 용도에 맞지 않는다.
+  // Gemini는 Flash 계열만 쓴다. 3.1 Pro는 아직 preview, 최상위 Gemini 4 Argon은 무료 티어가 없고
+  // 단가가 Flash의 수 배라 자막 번역 용도에 맞지 않는다. (3.8 Flash-Lite는 TTS 전용이라 텍스트는 3.5가 최신)
   gemini: [
     { value: 'gemini-3.5-flash-lite', name: 'Flash-Lite 3.5', tier: 'fastCheap' },
-    { value: 'gemini-3.6-flash', name: 'Flash 3.6', tier: 'recommended' },
+    { value: 'gemini-3.8-flash', name: 'Flash 3.8', tier: 'recommended' },
   ],
   'claude-code': [
-    { value: 'claude-sonnet-5', name: 'Sonnet 5', tier: 'fast' },
-    { value: 'claude-opus-5', name: 'Opus 5', tier: 'highQuality' },
+    { value: 'claude-sonnet-5-5', name: 'Sonnet 5.5', tier: 'fast' },
+    { value: 'claude-opus-5-5', name: 'Opus 5.5', tier: 'highQuality' },
   ],
 };
 

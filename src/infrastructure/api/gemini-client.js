@@ -10,11 +10,11 @@
 export async function callGemini(systemPrompt, userText, apiKey, model, maxTokens) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  // Flash 계열은 thinking이 기본 활성화 → 자막 번역엔 불필요하므로 비활성화(비용·지연 절감).
-  // Pro 계열은 최소 thinking budget이 강제되어 0 설정 시 에러가 날 수 있으므로 손대지 않는다.
+  // Flash는 thinking이 기본 MEDIUM → 자막 번역엔 불필요하므로 최저 단계로 낮춘다(비용·지연 절감).
+  // 3.8 Flash는 thinking을 끌 수 없고 MINIMAL은 에러라 LOW가 최저. Flash-Lite는 기본값이 이미 MINIMAL이라 손대지 않는다.
   const genConfig = { maxOutputTokens: maxTokens };
-  if (model.includes('flash')) {
-    genConfig.thinkingConfig = { thinkingBudget: 0 };
+  if (model.includes('flash') && !model.includes('flash-lite')) {
+    genConfig.thinkingConfig = { thinkingLevel: 'LOW' };
   }
 
   const body = JSON.stringify({

@@ -1,3 +1,5 @@
+import { MODELS } from '../../domain/constants.js';
+
 /**
  * chrome.storage.local 래퍼
  * Provider 설정을 로드하는 유틸리티
@@ -22,14 +24,19 @@ export async function getProviderConfig() {
 
   if (provider === 'gemini') {
     apiKey = stored.geminiApiKey;
-    model = stored.geminiModel || stored.model || 'gemini-3.6-flash';
+    model = stored.geminiModel || stored.model || 'gemini-3.8-flash';
   } else if (provider === 'claude-code') {
     apiKey = stored.claudeCodeUrl || 'http://localhost:3456';
-    model = stored.claudeCodeModel || 'claude-sonnet-5';
+    model = stored.claudeCodeModel || 'claude-sonnet-5-5';
   } else {
     apiKey = stored.claudeApiKey || stored.apiKey;
-    model = stored.claudeModel || stored.model || 'claude-haiku-4-5-20251001';
+    model = stored.claudeModel || stored.model || 'claude-haiku-5-5';
   }
+
+  // 목록에서 사라진 구버전 모델이 저장돼 있으면 첫 옵션으로(팝업 settings-controller의 정규화와 동일).
+  // 팝업을 다시 열지 않은 사용자도 폐기된 ID나 thinking 설정이 맞지 않는 구세대 모델로 요청하지 않게 한다.
+  const models = MODELS[provider];
+  if (models && !models.some(m => m.value === model)) model = models[0].value;
 
   return { provider, apiKey, model };
 }

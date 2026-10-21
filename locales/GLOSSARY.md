@@ -13,7 +13,7 @@
 아래는 **모든 언어에서 원형 그대로** 둔다.
 
 - **브랜드/고유명사**: `Claude`, `Claude Code`, `Gemini`, `Anthropic`, `Google`, `Udemy`
-- **모델명**: `Haiku 4.5`, `Sonnet 5`, `Opus 5`, `Flash-Lite 3.5`, `Flash 3.6` (등급 설명어 `fast/balanced/…`는 번역 대상 — §3 참고)
+- **모델명**: `Haiku 5.5`, `Sonnet 5.5`, `Opus 5.5`, `Flash-Lite 3.5`, `Flash 3.8` (등급 설명어 `fast/balanced/…`는 번역 대상 — §3 참고)
 - **기술어**: `API`(약어), `URL`, `VTT`, `node`, `proxy-server/server.js` 같은 명령/경로
 - **언어 선택기 엔도님**: `English`, `한국어`, `日本語`, `中文` — 언어 자기 이름은 **어느 UI 언어에서도 그대로**(번역 대상 언어 드롭다운 `#targetLang`, 화면 언어 드롭다운 `#uiLang`의 옵션 라벨). `targetLang` 저장값은 코드(`en`/`ko`/`ja`/`zh`)이며, 화면에는 그 코드의 엔도님을 표시한다.
 - **플레이스홀더 토큰**: `{count}` `{total}` `{selected}` `{provider}` `{lang}` — 번역·변형 금지, **위치만** 언어 어순에 맞게 이동.
@@ -68,7 +68,7 @@
 | recommended | recommended | 권장 | 推奨 |
 | highQuality | high quality | 고품질 | 高品質 |
 
-렌더 형태: `{모델명} ({등급어})` — 예 `Sonnet 5 (balanced)` / `Sonnet 5 (균형)`.
+렌더 형태: `{모델명} ({등급어})` — 예 `Sonnet 5.5 (balanced)` / `Sonnet 5.5 (균형)`.
 
 ---
 

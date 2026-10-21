@@ -31,5 +31,6 @@ export async function callClaude(systemPrompt, userText, apiKey, model, maxToken
   }
 
   const data = await response.json();
-  return data.content[0].text.trim();
+  // 5.x 모델은 thinking이 기본으로 켜져 있어 content 앞에 thinking 블록이 올 수 있다 → text 블록을 찾는다.
+  return data.content.find(b => b.type === 'text').text.trim();
 }
