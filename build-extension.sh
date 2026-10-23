@@ -16,7 +16,8 @@
 # 제외: content.src.js(빌드 입력), docs·docker·proxy-server, README, *.zip, .git 등
 #
 # 요구: node, npx(esbuild)  — 프로젝트는 esbuild 로 content.js 를 번들한다.
-#       압축은 zip 을 쓰고, 없으면(Windows Git Bash) PowerShell Compress-Archive 로 대체한다.
+#       압축은 zip 을 쓰고, 없으면(Windows Git Bash) PowerShell + .NET ZipFile 로 대체한다.
+#       (어느 쪽이든 항목 경로는 / 로 저장되고, 만든 뒤 검증한다.)
 
 set -euo pipefail
 
@@ -71,14 +72,54 @@ rm -f "$OUT"
 find "$STAGE" -name ".DS_Store" -delete
 find "$STAGE" -name "*.test.*" -delete
 if command -v zip >/dev/null 2>&1; then
+  # macOS·Linux (또는 zip 이 설치된 Git Bash)
   ( cd "$STAGE" && zip -r -X -q "$OUT" . -x "*.DS_Store" )
 else
-  # Windows(Git Bash)에는 zip 이 없다 → PowerShell Compress-Archive 로 대체.
+  # Windows(Git Bash)에는 zip 이 없다 → PowerShell + .NET ZipFile 로 대체.
+  # Windows PowerShell 5.1 의 Compress-Archive 는 항목 경로를 'src\app.js' 처럼 역슬래시로 저장해서
+  # 웹스토어·macOS 에서 폴더 구조가 깨진다. 항목 이름을 직접 '/' 로 지정해 표준 zip 을 만든다.
   towin() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi; }
   PS="$(command -v pwsh || command -v powershell)" || {
     echo "→ zip 도 PowerShell 도 없어 압축할 수 없음" >&2; exit 1; }
-  "$PS" -NoProfile -NonInteractive -Command \
-    "Compress-Archive -Path '$(towin "$STAGE")\*' -DestinationPath '$(towin "$OUT")' -Force"
+  PS_SCRIPT="$(mktemp -d)/make-zip.ps1"
+  cat > "$PS_SCRIPT" <<'PS1'
+param([string]$Src, [string]$Out)
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$root = (Resolve-Path -LiteralPath $Src).Path.TrimEnd([char]92, [char]47)
+$zip = [IO.Compression.ZipFile]::Open($Out, 'Create')
+try {
+  Get-ChildItem -LiteralPath $root -Recurse -File | Sort-Object FullName | ForEach-Object {
+    $name = $_.FullName.Substring($root.Length + 1).Replace([string][char]92, '/')
+    [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $name, 'Optimal')
+  }
+} finally { $zip.Dispose() }
+PS1
+  "$PS" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$(towin "$PS_SCRIPT")" \
+    -Src "$(towin "$STAGE")" -Out "$(towin "$OUT")"
+  rm -rf "$(dirname "$PS_SCRIPT")"
 fi
 
-echo "✅ 완료: $OUT ($(du -h "$OUT" | cut -f1), $(unzip -l "$OUT" | tail -1 | awk '{print $2}') files)"
+echo "▶ zip 검증…"
+# 항목 경로에 역슬래시가 있거나 manifest.json 이 루트에 없으면 웹스토어 업로드가 깨진다.
+node -e '
+const fs = require("fs");
+const buf = fs.readFileSync(process.argv[1]);
+// zip 끝의 EOCD 레코드 → 중앙 디렉터리를 따라가며 항목 이름을 읽는다 (외부 도구 없이 OS 공통으로 동작).
+const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+if (eocd < 0) { console.error("  ❌ zip 형식이 아님"); process.exit(1); }
+const count = buf.readUInt16LE(eocd + 10);
+const names = [];
+for (let i = 0, off = buf.readUInt32LE(eocd + 16); i < count; i++) {
+  if (buf.readUInt32LE(off) !== 0x02014b50) { console.error("  ❌ 중앙 디렉터리 손상"); process.exit(1); }
+  const nameLen = buf.readUInt16LE(off + 28), extraLen = buf.readUInt16LE(off + 30), commentLen = buf.readUInt16LE(off + 32);
+  names.push(buf.toString("utf8", off + 46, off + 46 + nameLen));
+  off += 46 + nameLen + extraLen + commentLen;
+}
+const bad = names.filter(n => n.includes("\\"));
+if (bad.length) { console.error("  ❌ 역슬래시 경로:", bad.slice(0, 5).join(", ")); process.exit(1); }
+if (!names.includes("manifest.json")) { console.error("  ❌ zip 루트에 manifest.json 없음"); process.exit(1); }
+console.log("  ✅ 항목 " + names.filter(n => !n.endsWith("/")).length + "개, 경로 구분자 / , manifest.json 루트");
+' "$OUT"
+
+echo "✅ 완료: $OUT ($(du -h "$OUT" | cut -f1))"
