@@ -169,7 +169,7 @@
             <div class="form-label-row">
               <label for="styleFontSize" class="form-label" data-i18n="style.fontSize"></label>
             </div>
-            <input type="range" id="styleFontSize" min="10" max="24" value="13" step="1" />
+            <input type="range" id="styleFontSize" min="10" max="40" value="13" step="1" />
           </div>
 
           <!-- 글자 색상 -->
@@ -245,6 +245,11 @@
           <span data-i18n="cache.title"></span>
           <span class="cache-badge" id="cacheBadge"></span>
         </button>
+        <button id="openLogDialog" class="btn-cache btn-log">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+          <span data-i18n="log.button"></span>
+          <span class="log-badge" id="logBadge"></span>
+        </button>
       </div>
     </div>
   </div>
@@ -288,6 +293,42 @@
       <div class="dialog-footer">
         <span class="cache-count" id="cacheCount"></span>
         <button class="btn-delete-all" id="cacheDeleteAll" data-i18n="cache.deleteAll"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 오류 로그 모달 ===== -->
+  <div class="dialog-overlay" id="logDialogOverlay">
+    <div class="dialog">
+      <div class="dialog-header">
+        <span class="dialog-ic dialog-ic--log" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FB7185" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </span>
+        <div class="dialog-head-titles">
+          <h2 data-i18n="log.title"></h2>
+          <p class="dialog-sub" data-i18n="log.subtitle"></p>
+        </div>
+        <button class="dialog-close" id="closeLogDialog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="log-banner" id="logBanner" hidden></div>
+      <div class="log-summary" id="logSummary"></div>
+
+      <div class="dialog-body log-list" id="logList">
+        <!-- 오류 로그가 여기에 렌더링됨 -->
+      </div>
+
+      <div class="dialog-footer">
+        <span class="cache-count" id="logCount"></span>
+        <div class="log-actions">
+          <button class="btn-log-copy" id="logCopy">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span id="logCopyText" data-i18n="log.copy"></span>
+          </button>
+          <button class="btn-delete-all" id="logClear" data-i18n="log.clear"></button>
+        </div>
       </div>
     </div>
   </div>

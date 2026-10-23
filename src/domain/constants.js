@@ -32,6 +32,33 @@ export const L1_MAX_SIZE = 50;
 // === Translation ===
 export const CHUNK_SIZE = 60;
 
+// === API 요청 제어 ===
+// 응답 대기 상한. 60줄 청크 + thinking 은 수십 초 걸릴 수 있어 넉넉히 둔다
+// (대기 중에는 스케줄러가 서비스 워커를 깨워 둔다).
+export const API_REQUEST_TIMEOUT_MS = 60_000;
+// 서비스 워커 안에서 기다릴 수 있는 최대 시간. 이보다 길면 기다리지 않고
+// 즉시 RATE_LIMIT 으로 돌려보내고, 재시도 시점은 content 쪽이 정한다.
+export const MAX_INLINE_WAIT_MS = 20_000;
+// 클라우드 요청 시작 간격(적응형): 429 를 받으면 늘리고 성공하면 줄인다.
+export const MIN_REQUEST_INTERVAL_MS = 1_000;
+export const MAX_REQUEST_INTERVAL_MS = 8_000;
+// 일일 한도 차단 상태 (chrome.storage.session — 서비스 워커 재시작에도 유지)
+export const API_BLOCK_KEY = 'apiBlock';
+
+// === 오류 로그 ===
+export const ERROR_LOG_KEY = 'errorLog';
+export const ERROR_LOG_SEEN_KEY = 'errorLogSeenAt';
+export const ERROR_LOG_MAX = 10;
+// 이 시간보다 오래 걸린 요청은 '느린 요청'으로 기록한다.
+export const SLOW_REQUEST_MS = 10_000;
+
+// === content 측 자동 재시도 ===
+export const AUTO_RETRY_BASE_MS = 30_000;   // 30초 → 1분 → 2분 → 4분 → 5분(상한)
+export const AUTO_RETRY_MAX_DELAY_MS = 5 * 60_000;
+export const AUTO_RETRY_MAX_ATTEMPTS = 6;
+// Claude Code 프록시: CLI 타임아웃(120초) + 프록시 큐 대기 여유
+export const CLAUDE_CODE_TIMEOUT_MS = 300_000;
+
 // === DOM Selectors (Udemy) ===
 export const SELECTORS = {
   panel: '[data-purpose="transcript-panel"]',

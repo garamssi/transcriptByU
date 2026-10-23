@@ -1,3 +1,6 @@
+import { ApiError, ERROR_CODES, redactSecrets } from '../../domain/api-error.js';
+import { CLAUDE_CODE_TIMEOUT_MS } from '../../domain/constants.js';
+
 /**
  * Claude Code 프록시 서버 API 호출
  * @param {string} systemPrompt - 시스템 프롬프트
@@ -14,18 +17,25 @@ export async function callClaudeCode(systemPrompt, userText, baseUrl, model) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ systemPrompt, userText, model }),
+      signal: AbortSignal.timeout(CLAUDE_CODE_TIMEOUT_MS),
     });
   } catch (e) {
-    throw new Error('CLAUDE_CODE_NOT_RUNNING');
+    if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
+      throw new ApiError(ERROR_CODES.TIMEOUT, { detail: e.message });
+    }
+    throw new ApiError(ERROR_CODES.NOT_RUNNING, { detail: e?.message });
   }
 
   if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`API_ERROR:${response.status}:${errBody}`);
+    const detail = redactSecrets(await response.text()).slice(0, 500);
+    const code = response.status >= 500 ? ERROR_CODES.SERVER : ERROR_CODES.BAD_REQUEST;
+    throw new ApiError(code, { status: response.status, detail });
   }
 
   const data = await response.json();
-  return data.result.trim();
+  const text = typeof data?.result === 'string' ? data.result.trim() : '';
+  if (!text) throw new ApiError(ERROR_CODES.EMPTY_RESPONSE, { detail: 'empty result' });
+  return text;
 }
 
 /**

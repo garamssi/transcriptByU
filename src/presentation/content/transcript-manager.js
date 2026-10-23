@@ -1,8 +1,7 @@
-import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR, STORAGE_KEYS } from '../../domain/constants.js';
-import { resolveCode } from '../../domain/languages.js';
+import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR } from '../../domain/constants.js';
 import { currentStyle } from './style-manager.js';
 import { replaceCaptionText, updateCaptionCache, clearCaptionCache } from './caption-manager.js';
-import { getVttTranslation, requestTranslations, forgetVttTranslations, currentLectureKey } from './vtt-bridge.js';
+import { getVttTranslation, requestTranslations, currentLectureKey, isRequestable, resetTracking } from './vtt-bridge.js';
 
 let observer = null;
 let panelFinderObserver = null;
@@ -97,7 +96,8 @@ export function collectCues(panel) {
   cues.forEach(cue => {
     const textSpan = cue.querySelector(SELECTORS.cueText);
     if (!textSpan) return;
-    const text = textSpan.dataset.original || textSpan.textContent.trim();
+    // VTT 파서와 같은 방식(연속 공백 → 1칸)으로 정규화해, 같은 문장이 경로마다 다른 키로 중복 요청되지 않게 한다.
+    const text = (textSpan.dataset.original || textSpan.textContent).replace(/\s+/g, ' ').trim();
     if (!text) return;
     const container = cue.closest('[class*="cue-container"]') || cue;
     items.push({ text, container, textSpan });
@@ -145,9 +145,6 @@ export function applyTranslation(textSpan, container, translation) {
 
 // === VTT 번역을 DOM에 적용 ===
 let isApplying = false;
-// 자동 경로에서 이미 번역 요청한 원본 텍스트 (중복·무한 요청 방지).
-// 네비게이션(cleanup) 및 재번역 시 초기화된다.
-const autoRequestedTexts = new Set();
 
 function applyVttTranslations(panel) {
   if (isApplying) return;
@@ -164,9 +161,10 @@ function applyVttTranslations(panel) {
     // (기존에는 VTT 캡처가 채워둔 번역을 '붙이기만' 했으므로, VTT 캡처가
     //  리스너 등록 레이스로 유실되면 자동 번역이 전혀 발사되지 않았다.
     //  이제 패널이 발견되면 미번역 큐를 직접 요청하여 API 를 발사한다.)
+    // 이미 요청 중이거나 실패 후 재시도 대기 중인 문장은 vtt-bridge 의 추적기가 관리하므로 제외한다.
     toRequest = untranslated
       .map(({ text }) => text)
-      .filter(text => text && !autoRequestedTexts.has(text));
+      .filter(text => text && isRequestable(text));
 
     const captionEl = document.querySelector(CAPTION_SELECTOR);
     if (captionEl) replaceCaptionText(captionEl);
@@ -176,10 +174,9 @@ function applyVttTranslations(panel) {
   }
 
   if (toRequest.length > 0) {
-    toRequest.forEach(text => autoRequestedTexts.add(text));
     console.log(`[UdemyTranslator] auto-translate: requesting ${toRequest.length} cues`);
     requestTranslations(toRequest)
-      .then(count => {
+      .then(({ count }) => {
         // 새 번역이 저장됐으면 재스캔하여 DOM 에 반영한다.
         if (count > 0) scheduleTranslation(panel);
       })
@@ -277,56 +274,41 @@ export function removeAllTranslations() {
 }
 
 // === 전체 재번역 ===
+// 캐시를 먼저 지우지 않는다. 캐시를 건너뛰고(force) 새로 번역한 뒤 성공한 줄만 교체하고,
+// 실패한 줄은 기존 번역을 그대로 유지한다(한도 초과 상태에서 눌러도 번역이 사라지지 않게).
 export async function retranslateAll() {
   console.log('[UdemyTranslator] retranslateAll() called');
   const panel = document.querySelector(SELECTORS.panel);
-  if (!panel) return { count: 0 };
+  if (!panel) return { count: 0, failed: 0, error: null };
 
   const cueItems = collectCues(panel);
-  if (cueItems.length === 0) return { count: 0 };
+  if (cueItems.length === 0) return { count: 0, failed: 0, error: null };
 
-  const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG]);
-  const targetCode = resolveCode(stored[STORAGE_KEYS.TARGET_LANG]);
-  const ctx = getLectureContext();
+  const texts = [...new Set(cueItems.map(({ text }) => text))];
+  // 실패·포기 상태로 남은 문장도 다시 요청할 수 있게 추적 기록을 지운다.
+  resetTracking(texts);
 
-  // 재번역 대상 원본 텍스트(영문)를 DOM 원복 전에 확보한다.
-  const texts = cueItems.map(({ text }) => text);
+  const { fresh, failedTexts, error } = await requestTranslations(texts, { force: true });
 
-  // 1) 영속 캐시(L1+L2) 삭제 → 다음 TRANSLATE_BATCH 가 API 를 새로 호출하도록 한다.
-  await chrome.runtime.sendMessage({
-    type: 'CLEAR_LECTURE_CACHE',
-    lang: targetCode,
-    course: ctx.course,
-    lecture: ctx.lecture,
-    section: ctx.section
-  });
-
-  // 2) 메모리 VTT 저장소의 기존 번역 폐기 + DOM 원복.
-  //    이 단계 없이는 applyVttTranslations 가 오래된 메모리 번역을 다시 붙여
-  //    캐시만 지워지고 화면은 그대로인 문제가 발생한다.
-  forgetVttTranslations(texts);
-  // 자동 요청 기록도 비워 강제 재번역이 API 를 새로 호출하게 한다.
-  autoRequestedTexts.clear();
-
-  pauseObserver();
-  for (const { textSpan } of cueItems) {
-    if (textSpan.dataset.original) {
-      textSpan.textContent = textSpan.dataset.original;
-      delete textSpan.dataset.original;
-      delete textSpan.dataset.translated;
+  if (fresh > 0) {
+    // 버킷에 새 번역이 들어갔으므로 DOM 을 원문으로 되돌린 뒤 버킷 기준으로 다시 붙인다.
+    // (실패한 줄은 버킷에 기존 번역이 남아 있어 그대로 다시 붙는다.)
+    pauseObserver();
+    for (const { textSpan } of cueItems) {
+      if (textSpan.dataset.original) {
+        textSpan.textContent = textSpan.dataset.original;
+        delete textSpan.dataset.original;
+        delete textSpan.dataset.translated;
+      }
+      const parent = textSpan.closest('p') || textSpan.parentElement;
+      parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach(el => el.remove());
     }
-    const parent = textSpan.closest('p') || textSpan.parentElement;
-    parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach(el => el.remove());
+    clearCaptionCache();
+    resumeObserver();
+    applyVttTranslations(panel);
   }
-  clearCaptionCache();
-  resumeObserver();
 
-  // 3) 캐시가 비었으므로 새 번역을 API 로 재요청한 뒤 DOM 에 적용한다.
-  await requestTranslations(texts);
-  applyVttTranslations(panel);
-
-  const translated = collectCues(panel).filter(({ textSpan }) => textSpan.dataset.original);
-  return { count: translated.length };
+  return { count: fresh, failed: failedTexts.length, error: error?.code || null };
 }
 
 // === Observer 정리 (네비게이션 시 호출) ===
@@ -335,6 +317,5 @@ export function cleanup() {
   if (panelFinderObserver) panelFinderObserver.disconnect();
   currentPanel = null;
   clearTimeout(settleTimer);
-  autoRequestedTexts.clear();
   clearCaptionCache();
 }

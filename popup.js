@@ -1,5 +1,6 @@
 import { initStylePreview } from './src/presentation/popup/style-preview.js';
 import { initCacheDialog } from './src/presentation/popup/cache-dialog.js';
+import { initErrorLogDialog } from './src/presentation/popup/error-log-dialog.js';
 import { initSettingsController } from './src/presentation/popup/settings-controller.js';
 import en from './locales/en.json' with { type: 'json' };
 import ko from './locales/ko.json' with { type: 'json' };
@@ -38,6 +39,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     cacheSelectAll: $('cacheSelectAll'),
     cacheDeleteSelected: $('cacheDeleteSelected'),
     cacheDeleteAll: $('cacheDeleteAll'),
+  });
+
+  // 오류 로그 다이얼로그 초기화
+  initErrorLogDialog({
+    openBtn: $('openLogDialog'),
+    overlay: $('logDialogOverlay'),
+    closeBtn: $('closeLogDialog'),
+    list: $('logList'),
+    badge: $('logBadge'),
+    banner: $('logBanner'),
+    summary: $('logSummary'),
+    count: $('logCount'),
+    copyBtn: $('logCopy'),
+    copyText: $('logCopyText'),
+    clearBtn: $('logClear'),
   });
 
   // 설정 컨트롤러 초기화

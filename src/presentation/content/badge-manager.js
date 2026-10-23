@@ -19,9 +19,22 @@ let badgeEl = null;
 let anchorEl = null;
 let lang = DEFAULT_TARGET_CODE;
 let enabled = true;
+// 번역 오류 상태 (null 이면 정상). 오류 중에는 배지를 빨간 점 + 원인 문구로 바꾼다.
+let errorCode = null;
 
 function badgeText() {
+  if (errorCode) {
+    const key = `badge.error.${errorCode}`;
+    const msg = t(key);
+    return msg === key ? t('badge.error.generic') : msg;
+  }
   return t('badge.translatingTo', { lang: languageName(lang, getLocale()) });
+}
+
+function render() {
+  if (!badgeEl) return;
+  badgeEl.querySelector('.utb-text').textContent = badgeText();
+  badgeEl.classList.toggle('utb-error', !!errorCode);
 }
 
 function build() {
@@ -29,6 +42,7 @@ function build() {
   el.className = 'udemy-translator-badge';
   el.innerHTML = `${MARK_SVG}<span class="utb-text"></span><span class="utb-dot"></span>`;
   el.querySelector('.utb-text').textContent = badgeText();
+  el.classList.toggle('utb-error', !!errorCode);
   return el;
 }
 
@@ -41,7 +55,16 @@ function mountTarget() {
 
 export function setBadgeLang(l) {
   if (l) lang = l;
-  if (badgeEl) badgeEl.querySelector('.utb-text').textContent = badgeText();
+  render();
+}
+
+/**
+ * 번역 오류 상태를 배지에 표시한다. null 이면 정상 상태로 되돌린다.
+ * @param {string|null} code - ERROR_CODES 값
+ */
+export function setBadgeError(code) {
+  errorCode = code || null;
+  render();
 }
 
 export function setBadgeEnabled(v) {

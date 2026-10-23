@@ -2,6 +2,7 @@ import { parseVtt } from '../../infrastructure/vtt/vtt-parser.js';
 import { LRUCache } from '../../infrastructure/cache/lru-cache.js';
 import { resolveCode, DEFAULT_TARGET_CODE } from '../../domain/languages.js';
 import { getLectureContext } from './transcript-manager.js';
+import { AUTO_RETRY_BASE_MS, AUTO_RETRY_MAX_ATTEMPTS, AUTO_RETRY_MAX_DELAY_MS } from '../../domain/constants.js';
 
 // 강의별 번역 버킷: lectureKey → Map<원문, 번역>.
 // 전역 단일 Map 을 쓰면, A 강의 요청의 늦은 응답이 B 로 이동한 뒤 도착해
@@ -117,17 +118,21 @@ export function initVttBridge() {
 
 /**
  * 주어진 원본 텍스트들을 배치 번역 요청하여 해당 강의 버킷에 저장한다.
- * VTT 캡처·DOM 자동 요청·수동 재번역 세 경로가 공통으로 사용한다. 캐시가 비어 있으면
+ * VTT 캡처·DOM 자동 요청·수동 재번역·자동 재시도 네 경로가 공통으로 사용한다. 캐시가 비어 있으면
  * background 의 TranslationService 가 API 를 호출해 새 번역을 만들어 반환한다.
  *
  * 버킷 키는 요청을 보내는 시점(= 그 강의가 현재일 때)에 캡처한다. 따라서 응답이
  * 늦게 도착해 다른 강의로 이동한 뒤여도, 결과는 항상 '요청한 강의' 버킷에 저장된다.
+ * 실패한 문장은 요청 추적기에 기록돼 간격을 늘려 가며 자동 재시도된다.
  * @param {string[]} texts - 원본 텍스트 목록
- * @returns {Promise<number>} 저장소에 채워진 번역 수
+ * @param {{ force?: boolean }} [opts] - force: 캐시를 건너뛰고 새로 번역 (재번역)
+ * @returns {Promise<{ count: number, fresh: number, failedTexts: string[], error: object|null }>}
+ *   count: 버킷에 채워진 번역 수, fresh: 그중 새로 번역된 수
  */
-export async function requestTranslations(texts) {
+export async function requestTranslations(texts, { force = false } = {}) {
+  const empty = { count: 0, fresh: 0, failedTexts: [], error: null };
   const uniqueTexts = [...new Set(texts)].filter(Boolean);
-  if (uniqueTexts.length === 0) return 0;
+  if (uniqueTexts.length === 0) return empty;
 
   // 목표 언어를 스토리지에서 읽어 동기화한다. 키에 lang 이 포함되므로,
   // 초기화 순서/레이스와 무관하게 항상 올바른 언어 키로 저장·조회되게 한다.
@@ -141,10 +146,13 @@ export async function requestTranslations(texts) {
   // 이미 요청 진행 중인 텍스트는 제외한다. 완료 처리는 진행 중인 호출이 담당하고,
   // 그 호출이 버킷을 채운 뒤 재스캔(vtt-translations-ready / 자동요청 reschedule)에서
   // 화면에 반영되므로, 여기서 재전송하지 않아도 누락되지 않는다.
+  // 진행 중인 호출이 실패하면 그 호출이 추적기에 실패를 기록하므로 재시도도 누락되지 않는다.
   const marker = t => `${key} ${t}`;
   const toSend = uniqueTexts.filter(t => !inFlight.has(marker(t)));
-  if (toSend.length === 0) return 0;
+  if (toSend.length === 0) return empty;
   toSend.forEach(t => inFlight.add(marker(t)));
+  const track = trackerFor(key);
+  toSend.forEach(t => track.set(t, { attempts: track.get(t)?.attempts || 0, state: 'pending' }));
 
   let response;
   try {
@@ -155,30 +163,161 @@ export async function requestTranslations(texts) {
       course: ctx.course,
       lecture: ctx.lecture,
       section: ctx.section,
+      force,
     });
+  } catch (err) {
+    // 서비스 워커 재시작·확장 업데이트 등으로 응답 채널이 끊긴 경우
+    response = { error: { code: 'DISCONNECTED', message: err?.message } };
   } finally {
     toSend.forEach(t => inFlight.delete(marker(t)));
   }
 
-  if (response?.error) {
-    console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
-    return 0;
-  }
-
+  const error = response?.error || null;
   const results = response?.results || [];
   const bucket = getOrCreateBucket(key);
   let cachedCount = 0;
   let freshCount = 0;
+  const failedTexts = [];
+  let failCode = null;
   for (let i = 0; i < toSend.length; i++) {
-    if (results[i]?.translation) {
-      bucket.set(toSend[i], results[i].translation);
-      if (results[i].cached) cachedCount++;
+    const r = results[i];
+    if (r?.translation && r.error) {
+      // 재번역(force) 실패: 기존 번역은 유지하되 실패로 집계한다(자동 재시도는 불필요).
+      bucket.set(toSend[i], r.translation);
+      failedTexts.push(toSend[i]);
+      failCode = failCode || r.error;
+      track.set(toSend[i], { state: 'done' });
+    } else if (r?.translation) {
+      bucket.set(toSend[i], r.translation);
+      if (r.cached) cachedCount++;
       else freshCount++;
+      track.set(toSend[i], { state: 'done' });
+    } else if (r?.skipped) {
+      track.set(toSend[i], { state: 'done' });
+    } else {
+      const code = r?.error || error?.code || 'UNKNOWN';
+      failedTexts.push(toSend[i]);
+      failCode = failCode || code;
+      markFailed(track, toSend[i], code, error?.retryAfterMs);
     }
   }
+  // 대표 오류가 없어도(예: 일부 줄 파싱 실패) 호출측이 실패 원인을 알 수 있게 채운다.
+  const resultError = error || (failCode ? { code: failCode } : null);
 
-  console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${toSend.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
-  return freshCount + cachedCount;
+  if (error) {
+    console.error(`[UdemyTranslator:VTT] translation error: ${error.code}${error.message ? ` — ${error.message}` : ''}`);
+  }
+  console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${toSend.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount}, failed: ${failedTexts.length})`);
+
+  scheduleRetry();
+  emitStatus({ key, error, failedCount: failedTexts.length, okCount: freshCount + cachedCount });
+  return { count: freshCount + cachedCount, fresh: freshCount, failedTexts, error: resultError };
+}
+
+// === 요청 추적·자동 재시도 ===
+// lectureKey → Map<원문, { state: 'pending'|'done'|'failed'|'gaveUp', attempts, nextRetryAt, code }>
+// DOM 자동 경로는 추적기에 없는 문장만 요청한다(이미 진행 중이거나 재시도 대기 중인 문장의
+// 중복 요청 방지). 실패한 문장의 재시도는 이 모듈의 타이머가 직접 담당한다.
+const tracker = new Map();
+let retryTimer = null;
+const statusListeners = new Set();
+
+// 자동 재시도해도 소용없는 오류 — 설정을 바꾸거나 한도가 초기화될 때까지 멈춘다.
+const NO_AUTO_RETRY = new Set(['QUOTA_DAILY', 'AUTH', 'BAD_REQUEST', 'NOT_RUNNING', 'BLOCKED', 'DISABLED', 'NO_API_KEY']);
+
+function trackerFor(key) {
+  let m = tracker.get(key);
+  if (!m) {
+    m = new Map();
+    tracker.set(key, m);
+  }
+  return m;
+}
+
+function markFailed(track, text, code, retryAfterMs) {
+  const attempts = (track.get(text)?.attempts || 0) + 1;
+  if (NO_AUTO_RETRY.has(code) || attempts >= AUTO_RETRY_MAX_ATTEMPTS) {
+    track.set(text, { state: 'gaveUp', attempts, code });
+    return;
+  }
+  const backoff = Math.min(AUTO_RETRY_BASE_MS * 2 ** (attempts - 1), AUTO_RETRY_MAX_DELAY_MS);
+  track.set(text, { state: 'failed', attempts, code, nextRetryAt: Date.now() + Math.max(backoff, retryAfterMs || 0) });
+}
+
+/** DOM 자동 경로가 이 문장을 새로 요청해도 되는지 (추적 중이면 false). */
+export function isRequestable(text, key = currentLectureKey()) {
+  return !tracker.get(key)?.has(text);
+}
+
+/** 재번역 전에 해당 문장들의 추적 기록을 지워 다시 요청할 수 있게 한다. */
+export function resetTracking(texts, key = currentLectureKey()) {
+  const track = tracker.get(key);
+  if (!track) return;
+  for (const t of texts) track.delete(t);
+}
+
+/**
+ * 설정이 바뀌어(번역 켜기·API 키·프로바이더 변경) 이전 실패가 더는 유효하지 않을 때,
+ * 실패·포기 상태의 문장을 모두 즉시 재시도 대상으로 되돌린다.
+ */
+export function resetFailures() {
+  const now = Date.now();
+  for (const track of tracker.values()) {
+    for (const [text, s] of track) {
+      if (s.state === 'failed' || s.state === 'gaveUp') {
+        track.set(text, { state: 'failed', attempts: 0, code: s.code, nextRetryAt: now });
+      }
+    }
+  }
+  scheduleRetry();
+}
+
+/**
+ * 요청 결과 상태 구독 (배지 표시용).
+ * @param {(s: { key: string, error: object|null, failedCount: number, okCount: number }) => void} listener
+ */
+export function onRequestStatus(listener) {
+  statusListeners.add(listener);
+}
+
+function emitStatus(status) {
+  for (const l of statusListeners) {
+    try { l(status); } catch (_) { /* noop */ }
+  }
+}
+
+function scheduleRetry() {
+  clearTimeout(retryTimer);
+  retryTimer = null;
+  const track = tracker.get(currentLectureKey());
+  if (!track) return;
+  let earliest = Infinity;
+  for (const s of track.values()) {
+    if (s.state === 'failed' && s.nextRetryAt < earliest) earliest = s.nextRetryAt;
+  }
+  if (earliest === Infinity) return;
+  retryTimer = setTimeout(retryDue, Math.max(0, earliest - Date.now()));
+}
+
+async function retryDue() {
+  retryTimer = null;
+  const track = tracker.get(currentLectureKey());
+  if (!track) return;
+  const now = Date.now();
+  const due = [...track.entries()]
+    .filter(([, s]) => s.state === 'failed' && s.nextRetryAt <= now)
+    .map(([text]) => text);
+  if (due.length === 0) {
+    scheduleRetry();
+    return;
+  }
+  console.log(`[UdemyTranslator:VTT] auto-retry: ${due.length} failed texts`);
+  try {
+    const { count } = await requestTranslations(due);
+    if (count > 0) document.dispatchEvent(new Event('vtt-translations-ready'));
+  } catch (err) {
+    console.error(`[UdemyTranslator:VTT] auto-retry error: ${err?.message || err}`);
+  }
 }
 
 /**
@@ -193,21 +332,13 @@ export function getVttTranslation(text, key = currentLectureKey()) {
 }
 
 /**
- * 지정한 원본 텍스트들의 메모리 번역을 폐기한다 (재번역 시 오래된 번역 제거).
- * @param {string[]} texts - 원본 텍스트 목록
- * @param {string} [key] - 대상 강의 키 (기본: 현재 강의)
- */
-export function forgetVttTranslations(texts, key = currentLectureKey()) {
-  const bucket = buckets.get(key);
-  if (!bucket) return;
-  for (const text of texts) bucket.delete(text);
-}
-
-/**
  * 네비게이션 시 호출. 강의별 버킷은 키로 분리돼 오염되지 않으므로 유지하고
- * (되돌아오면 즉시 재사용, LRU 로 상한), VTT URL 처리 기록만 초기화해
- * 새 강의의 VTT 를 다시 처리하도록 한다.
+ * (되돌아오면 즉시 재사용, LRU 로 상한), VTT URL 처리 기록과 요청 추적기만 초기화해
+ * 새 강의의 VTT 를 다시 처리하고, 되돌아오면 실패했던 문장도 다시 요청하도록 한다.
  */
 export function clearVttStore() {
   processedUrls.clear();
+  tracker.clear();
+  clearTimeout(retryTimer);
+  retryTimer = null;
 }

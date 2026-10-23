@@ -19,7 +19,10 @@
     "statusNotRunning": "{provider} 未起動 — ターミナルで node proxy-server/server.js を実行してください",
     "statusNeedKey": "{provider}のAPIキーを入力してください",
     "enableOn": "翻訳オン",
-    "enableOff": "翻訳オフ"
+    "enableOff": "翻訳オフ",
+    "retranslateFailed": "再翻訳失敗 · {reason}",
+    "retranslatePartial": "{count}件再翻訳 · {failed}件失敗",
+    "retranslateBlocked": "1日の上限に到達 · {time}以降に利用可能"
   },
   "settings": {
     "model": "モデル",
@@ -68,7 +71,16 @@
     "delLesson": "このレッスンのキャッシュを削除"
   },
   "badge": {
-    "translatingTo": "{lang}に翻訳中"
+    "translatingTo": "{lang}に翻訳中",
+    "error": {
+      "RATE_LIMIT": "リクエスト制限 · まもなく再試行",
+      "QUOTA_DAILY": "1日の上限に到達",
+      "AUTH": "APIキーエラー",
+      "BAD_REQUEST": "リクエストエラー · 設定を確認",
+      "NOT_RUNNING": "プロキシ未起動",
+      "NO_API_KEY": "APIキー未設定",
+      "generic": "翻訳エラー · 再試行中"
+    }
   },
   "model": {
     "tier": {
@@ -77,6 +89,61 @@
       "balanced": "バランス",
       "recommended": "推奨",
       "highQuality": "高品質"
+    }
+  },
+  "log": {
+    "button": "エラーログ",
+    "title": "エラーログ",
+    "subtitle": "最新10件 · 翻訳エラーと遅いリクエスト",
+    "empty": "最近のエラーはありません",
+    "emptySub": "翻訳中に問題が起きるとここに記録されます",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "clear": "クリア",
+    "count": "{total}件",
+    "detail": "詳細メッセージ",
+    "lines": "{count}行",
+    "failedLines": "{failed}/{lines}行失敗",
+    "took": "{sec}秒かかりました",
+    "waited": "{sec}秒待機",
+    "retryAfter": "{sec}秒後に再試行推奨",
+    "noLecture": "(レクチャー情報なし)",
+    "summaryErrors": "エラー {count}",
+    "summaryWarns": "警告 {count}",
+    "blockedBanner": "{provider} の1日の上限に到達 — {time}に再開します",
+    "code": {
+      "RATE_LIMIT": "分間リクエスト上限超過",
+      "QUOTA_DAILY": "1日の上限に到達",
+      "AUTH": "APIキーエラー",
+      "BAD_REQUEST": "リクエスト拒否",
+      "SERVER": "AIサーバーエラー",
+      "TIMEOUT": "応答タイムアウト",
+      "NETWORK": "ネットワークエラー",
+      "EMPTY_RESPONSE": "空の応答",
+      "BLOCKED": "安全フィルターでブロック",
+      "MAX_TOKENS": "応答の長さ超過",
+      "PARSE_ERROR": "一部の行の翻訳に失敗",
+      "NOT_RUNNING": "プロキシ未起動",
+      "DISCONNECTED": "拡張機能との接続切れ",
+      "SLOW": "遅いリクエスト",
+      "UNKNOWN": "不明なエラー"
+    },
+    "hint": {
+      "RATE_LIMIT": "分間の上限に達しました。間隔を空けて自動で再試行します。",
+      "QUOTA_DAILY": "今日のリクエスト上限を使い切りました。上限がリセットされると再開します。",
+      "AUTH": "APIキーが無効か権限がありません。キーを確認してください。",
+      "BAD_REQUEST": "リクエストが拒否されました。モデル設定を確認してください。",
+      "SERVER": "AIサーバーが一時的に不安定です。自動で再試行します。",
+      "TIMEOUT": "応答に時間がかかりすぎました。自動で再試行します。",
+      "NETWORK": "インターネット接続を確認してください。自動で再試行します。",
+      "EMPTY_RESPONSE": "空の応答を受け取りました。自動で再試行します。",
+      "BLOCKED": "安全フィルターに該当した行は原文のまま残します。",
+      "MAX_TOKENS": "応答が途中で切れました。分割して再送しました。",
+      "PARSE_ERROR": "一部の行を翻訳結果と対応付けできませんでした。自動で再試行します。",
+      "NOT_RUNNING": "Claude Code プロキシが起動していません。ターミナルで起動してください。",
+      "DISCONNECTED": "拡張機能との接続が切れました。自動で再試行します。",
+      "SLOW": "応答が遅れました。続く場合はリクエスト上限に近い可能性があります。",
+      "UNKNOWN": "予期しないエラーです。詳細を確認してください。"
     }
   }
 }

@@ -6,8 +6,8 @@ import {
 } from './src/presentation/content/transcript-manager.js';
 import { initCaptionFinder } from './src/presentation/content/caption-manager.js';
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
-import { initVttBridge, setActiveLang } from './src/presentation/content/vtt-bridge.js';
-import { setBadgeEnabled, setBadgeLang } from './src/presentation/content/badge-manager.js';
+import { initVttBridge, setActiveLang, onRequestStatus, resetFailures, currentLectureKey } from './src/presentation/content/vtt-bridge.js';
+import { setBadgeEnabled, setBadgeLang, setBadgeError } from './src/presentation/content/badge-manager.js';
 import { resolveCode } from './src/domain/languages.js';
 import en from './locales/en.json';
 import ko from './locales/ko.json';
@@ -28,6 +28,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
     const panel = document.querySelector(SELECTORS.panel);
     if (panel) scheduleTranslation(panel);
+  }
+
+  // 번역 켜기·프로바이더·API 키가 바뀌면 이전 설정에서 실패한 문장을 다시 시도한다.
+  const RETRY_ON_CHANGE = [STORAGE_KEYS.PROVIDER, STORAGE_KEYS.GEMINI_API_KEY, STORAGE_KEYS.CLAUDE_API_KEY,
+    STORAGE_KEYS.CLAUDE_CODE_URL, STORAGE_KEYS.GEMINI_MODEL, STORAGE_KEYS.CLAUDE_MODEL, STORAGE_KEYS.CLAUDE_CODE_MODEL];
+  if (changes[STORAGE_KEYS.ENABLED]?.newValue !== false && [STORAGE_KEYS.ENABLED, ...RETRY_ON_CHANGE].some(k => changes[k] && changes[k].oldValue !== changes[k].newValue)) {
+    setBadgeError(null);
+    resetFailures();
   }
 
   if (changes[STORAGE_KEYS.TARGET_LANG]) {
@@ -60,6 +68,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_LECTURE_INFO') {
     sendResponse(getLectureContext());
   }
+});
+
+// === 번역 요청 결과 → 배지 오류 표시 ===
+// 일부 줄 파싱 실패는 자동 재시도로 대부분 회복되므로 배지에 띄우지 않는다.
+// 다른 강의로 이동한 뒤 늦게 도착한 응답은 현재 강의 배지에 반영하지 않는다.
+onRequestStatus(({ key, error, failedCount, okCount }) => {
+  if (key !== currentLectureKey()) return;
+  if (error && error.code !== 'PARSE_ERROR' && error.code !== 'DISABLED') setBadgeError(error.code);
+  else if (failedCount === 0 || okCount > 0) setBadgeError(null);
 });
 
 // === SPA 네비게이션 대응 ===

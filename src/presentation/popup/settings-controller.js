@@ -2,6 +2,7 @@ import { STYLE_DEFAULTS, MODELS, STORAGE_KEYS } from '../../domain/constants.js'
 import { checkClaudeCodeConnection } from '../../infrastructure/api/claude-code-client.js';
 import { t, applyI18n, setLocale, getLocale } from '../../shared/i18n.js';
 import { LANGUAGES, TARGET_CODES, UI_CODES, resolveCode } from '../../domain/languages.js';
+import { getActiveBlocks, formatResumeTime } from './error-log-dialog.js';
 
 /**
  * 설정 UI를 초기화한다.
@@ -313,6 +314,18 @@ export async function initSettingsController($, updatePreview) {
 
   retranslateBtn.addEventListener('click', async () => {
     retranslateBtn.disabled = true;
+
+    // 일일 한도로 막혀 있으면 요청을 보내지 않고 재개 시각만 알려준다.
+    const block = (await getActiveBlocks()).find(b => b.provider === currentProvider && b.model === modelSelect.value);
+    if (block) {
+      retranslateText.textContent = t('popup.retranslateBlocked', { time: formatResumeTime(block.until) });
+      setTimeout(() => {
+        retranslateBtn.disabled = false;
+        retranslateText.textContent = t('popup.retranslate');
+      }, 3500);
+      return;
+    }
+
     retranslateText.textContent = t('popup.retranslating');
     retranslateBtn.classList.add('btn-loading');
 
@@ -321,7 +334,16 @@ export async function initSettingsController($, updatePreview) {
       if (isUdemyCourseTab(tab)) {
         const res = await chrome.tabs.sendMessage(tab.id, { type: 'RETRANSLATE_ALL' });
         const count = res?.count || 0;
-        retranslateText.textContent = t('popup.retranslateDone', { count });
+        const failed = res?.failed || 0;
+        if (count === 0 && (failed > 0 || res?.error)) {
+          const reasonKey = `log.code.${res?.error || 'UNKNOWN'}`;
+          const reason = t(reasonKey);
+          retranslateText.textContent = t('popup.retranslateFailed', { reason: reason === reasonKey ? res.error : reason });
+        } else if (failed > 0) {
+          retranslateText.textContent = t('popup.retranslatePartial', { count, failed });
+        } else {
+          retranslateText.textContent = t('popup.retranslateDone', { count });
+        }
       } else {
         retranslateText.textContent = t('popup.openUdemy');
       }

@@ -26,6 +26,9 @@
     UI_LANG: "uiLang"
   };
   var L1_MAX_SIZE = 50;
+  var AUTO_RETRY_BASE_MS = 3e4;
+  var AUTO_RETRY_MAX_DELAY_MS = 5 * 6e4;
+  var AUTO_RETRY_MAX_ATTEMPTS = 6;
   var SELECTORS = {
     panel: '[data-purpose="transcript-panel"]',
     cueAll: 'p[data-purpose="transcript-cue"], p[data-purpose="transcript-cue-active"]',
@@ -349,9 +352,10 @@
     });
     window.postMessage({ type: "UDEMY_VTT_BRIDGE_READY" }, window.location.origin);
   }
-  async function requestTranslations(texts) {
+  async function requestTranslations(texts, { force = false } = {}) {
+    const empty = { count: 0, fresh: 0, failedTexts: [], error: null };
     const uniqueTexts = [...new Set(texts)].filter(Boolean);
-    if (uniqueTexts.length === 0) return 0;
+    if (uniqueTexts.length === 0) return empty;
     const { targetLang } = await chrome.storage.local.get("targetLang");
     const targetCode = resolveCode(targetLang);
     currentLang = targetCode;
@@ -359,8 +363,10 @@
     const key = currentLectureKey();
     const marker = (t2) => `${key} ${t2}`;
     const toSend = uniqueTexts.filter((t2) => !inFlight.has(marker(t2)));
-    if (toSend.length === 0) return 0;
+    if (toSend.length === 0) return empty;
     toSend.forEach((t2) => inFlight.add(marker(t2)));
+    const track = trackerFor(key);
+    toSend.forEach((t2) => track.set(t2, { attempts: track.get(t2)?.attempts || 0, state: "pending" }));
     let response;
     try {
       response = await chrome.runtime.sendMessage({
@@ -369,40 +375,141 @@
         targetCode,
         course: ctx.course,
         lecture: ctx.lecture,
-        section: ctx.section
+        section: ctx.section,
+        force
       });
+    } catch (err) {
+      response = { error: { code: "DISCONNECTED", message: err?.message } };
     } finally {
       toSend.forEach((t2) => inFlight.delete(marker(t2)));
     }
-    if (response?.error) {
-      console.error(`[UdemyTranslator:VTT] translation error: ${response.error}`);
-      return 0;
-    }
+    const error = response?.error || null;
     const results = response?.results || [];
     const bucket = getOrCreateBucket(key);
     let cachedCount = 0;
     let freshCount = 0;
+    const failedTexts = [];
+    let failCode = null;
     for (let i = 0; i < toSend.length; i++) {
-      if (results[i]?.translation) {
-        bucket.set(toSend[i], results[i].translation);
-        if (results[i].cached) cachedCount++;
+      const r = results[i];
+      if (r?.translation && r.error) {
+        bucket.set(toSend[i], r.translation);
+        failedTexts.push(toSend[i]);
+        failCode = failCode || r.error;
+        track.set(toSend[i], { state: "done" });
+      } else if (r?.translation) {
+        bucket.set(toSend[i], r.translation);
+        if (r.cached) cachedCount++;
         else freshCount++;
+        track.set(toSend[i], { state: "done" });
+      } else if (r?.skipped) {
+        track.set(toSend[i], { state: "done" });
+      } else {
+        const code = r?.error || error?.code || "UNKNOWN";
+        failedTexts.push(toSend[i]);
+        failCode = failCode || code;
+        markFailed(track, toSend[i], code, error?.retryAfterMs);
       }
     }
-    console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${toSend.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount})`);
-    return freshCount + cachedCount;
+    const resultError = error || (failCode ? { code: failCode } : null);
+    if (error) {
+      console.error(`[UdemyTranslator:VTT] translation error: ${error.code}${error.message ? ` \u2014 ${error.message}` : ""}`);
+    }
+    console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${toSend.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount}, failed: ${failedTexts.length})`);
+    scheduleRetry();
+    emitStatus({ key, error, failedCount: failedTexts.length, okCount: freshCount + cachedCount });
+    return { count: freshCount + cachedCount, fresh: freshCount, failedTexts, error: resultError };
+  }
+  var tracker = /* @__PURE__ */ new Map();
+  var retryTimer = null;
+  var statusListeners = /* @__PURE__ */ new Set();
+  var NO_AUTO_RETRY = /* @__PURE__ */ new Set(["QUOTA_DAILY", "AUTH", "BAD_REQUEST", "NOT_RUNNING", "BLOCKED", "DISABLED", "NO_API_KEY"]);
+  function trackerFor(key) {
+    let m = tracker.get(key);
+    if (!m) {
+      m = /* @__PURE__ */ new Map();
+      tracker.set(key, m);
+    }
+    return m;
+  }
+  function markFailed(track, text, code, retryAfterMs) {
+    const attempts = (track.get(text)?.attempts || 0) + 1;
+    if (NO_AUTO_RETRY.has(code) || attempts >= AUTO_RETRY_MAX_ATTEMPTS) {
+      track.set(text, { state: "gaveUp", attempts, code });
+      return;
+    }
+    const backoff = Math.min(AUTO_RETRY_BASE_MS * 2 ** (attempts - 1), AUTO_RETRY_MAX_DELAY_MS);
+    track.set(text, { state: "failed", attempts, code, nextRetryAt: Date.now() + Math.max(backoff, retryAfterMs || 0) });
+  }
+  function isRequestable(text, key = currentLectureKey()) {
+    return !tracker.get(key)?.has(text);
+  }
+  function resetTracking(texts, key = currentLectureKey()) {
+    const track = tracker.get(key);
+    if (!track) return;
+    for (const t2 of texts) track.delete(t2);
+  }
+  function resetFailures() {
+    const now = Date.now();
+    for (const track of tracker.values()) {
+      for (const [text, s] of track) {
+        if (s.state === "failed" || s.state === "gaveUp") {
+          track.set(text, { state: "failed", attempts: 0, code: s.code, nextRetryAt: now });
+        }
+      }
+    }
+    scheduleRetry();
+  }
+  function onRequestStatus(listener) {
+    statusListeners.add(listener);
+  }
+  function emitStatus(status) {
+    for (const l of statusListeners) {
+      try {
+        l(status);
+      } catch (_) {
+      }
+    }
+  }
+  function scheduleRetry() {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    const track = tracker.get(currentLectureKey());
+    if (!track) return;
+    let earliest = Infinity;
+    for (const s of track.values()) {
+      if (s.state === "failed" && s.nextRetryAt < earliest) earliest = s.nextRetryAt;
+    }
+    if (earliest === Infinity) return;
+    retryTimer = setTimeout(retryDue, Math.max(0, earliest - Date.now()));
+  }
+  async function retryDue() {
+    retryTimer = null;
+    const track = tracker.get(currentLectureKey());
+    if (!track) return;
+    const now = Date.now();
+    const due = [...track.entries()].filter(([, s]) => s.state === "failed" && s.nextRetryAt <= now).map(([text]) => text);
+    if (due.length === 0) {
+      scheduleRetry();
+      return;
+    }
+    console.log(`[UdemyTranslator:VTT] auto-retry: ${due.length} failed texts`);
+    try {
+      const { count } = await requestTranslations(due);
+      if (count > 0) document.dispatchEvent(new Event("vtt-translations-ready"));
+    } catch (err) {
+      console.error(`[UdemyTranslator:VTT] auto-retry error: ${err?.message || err}`);
+    }
   }
   function getVttTranslation(text, key = currentLectureKey()) {
     const bucket = buckets.get(key);
     return bucket && bucket.get(text) || null;
   }
-  function forgetVttTranslations(texts, key = currentLectureKey()) {
-    const bucket = buckets.get(key);
-    if (!bucket) return;
-    for (const text of texts) bucket.delete(text);
-  }
   function clearVttStore() {
     processedUrls.clear();
+    tracker.clear();
+    clearTimeout(retryTimer);
+    retryTimer = null;
   }
 
   // src/shared/i18n.js
@@ -446,14 +553,26 @@
   var anchorEl = null;
   var lang = DEFAULT_TARGET_CODE;
   var enabled = true;
+  var errorCode = null;
   function badgeText() {
+    if (errorCode) {
+      const key = `badge.error.${errorCode}`;
+      const msg = t(key);
+      return msg === key ? t("badge.error.generic") : msg;
+    }
     return t("badge.translatingTo", { lang: languageName(lang, getLocale()) });
+  }
+  function render() {
+    if (!badgeEl) return;
+    badgeEl.querySelector(".utb-text").textContent = badgeText();
+    badgeEl.classList.toggle("utb-error", !!errorCode);
   }
   function build() {
     const el = document.createElement("div");
     el.className = "udemy-translator-badge";
     el.innerHTML = `${MARK_SVG}<span class="utb-text"></span><span class="utb-dot"></span>`;
     el.querySelector(".utb-text").textContent = badgeText();
+    el.classList.toggle("utb-error", !!errorCode);
     return el;
   }
   function mountTarget() {
@@ -463,7 +582,11 @@
   }
   function setBadgeLang(l) {
     if (l) lang = l;
-    if (badgeEl) badgeEl.querySelector(".utb-text").textContent = badgeText();
+    render();
+  }
+  function setBadgeError(code) {
+    errorCode = code || null;
+    render();
   }
   function setBadgeEnabled(v) {
     enabled = v !== false;
@@ -656,7 +779,7 @@
     cues.forEach((cue) => {
       const textSpan = cue.querySelector(SELECTORS.cueText);
       if (!textSpan) return;
-      const text = textSpan.dataset.original || textSpan.textContent.trim();
+      const text = (textSpan.dataset.original || textSpan.textContent).replace(/\s+/g, " ").trim();
       if (!text) return;
       const container = cue.closest('[class*="cue-container"]') || cue;
       items.push({ text, container, textSpan });
@@ -692,7 +815,6 @@
     applyDisplayMode(container);
   }
   var isApplying = false;
-  var autoRequestedTexts = /* @__PURE__ */ new Set();
   function applyVttTranslations(panel) {
     if (isApplying) return;
     isApplying = true;
@@ -701,7 +823,7 @@
     try {
       const cueItems = collectCues(panel);
       const untranslated = getUntranslatedCues(cueItems);
-      toRequest = untranslated.map(({ text }) => text).filter((text) => text && !autoRequestedTexts.has(text));
+      toRequest = untranslated.map(({ text }) => text).filter((text) => text && isRequestable(text));
       const captionEl = document.querySelector(CAPTION_SELECTOR);
       if (captionEl) replaceCaptionText(captionEl);
     } finally {
@@ -709,9 +831,8 @@
       isApplying = false;
     }
     if (toRequest.length > 0) {
-      toRequest.forEach((text) => autoRequestedTexts.add(text));
       console.log(`[UdemyTranslator] auto-translate: requesting ${toRequest.length} cues`);
-      requestTranslations(toRequest).then((count) => {
+      requestTranslations(toRequest).then(({ count }) => {
         if (count > 0) scheduleTranslation(panel);
       }).catch((err) => {
         console.error("[UdemyTranslator] auto-translate request failed:", err?.message || err);
@@ -784,51 +905,41 @@
   async function retranslateAll() {
     console.log("[UdemyTranslator] retranslateAll() called");
     const panel = document.querySelector(SELECTORS.panel);
-    if (!panel) return { count: 0 };
+    if (!panel) return { count: 0, failed: 0, error: null };
     const cueItems = collectCues(panel);
-    if (cueItems.length === 0) return { count: 0 };
-    const stored = await chrome.storage.local.get([STORAGE_KEYS.TARGET_LANG]);
-    const targetCode = resolveCode(stored[STORAGE_KEYS.TARGET_LANG]);
-    const ctx = getLectureContext();
-    const texts = cueItems.map(({ text }) => text);
-    await chrome.runtime.sendMessage({
-      type: "CLEAR_LECTURE_CACHE",
-      lang: targetCode,
-      course: ctx.course,
-      lecture: ctx.lecture,
-      section: ctx.section
-    });
-    forgetVttTranslations(texts);
-    autoRequestedTexts.clear();
-    pauseObserver();
-    for (const { textSpan } of cueItems) {
-      if (textSpan.dataset.original) {
-        textSpan.textContent = textSpan.dataset.original;
-        delete textSpan.dataset.original;
-        delete textSpan.dataset.translated;
+    if (cueItems.length === 0) return { count: 0, failed: 0, error: null };
+    const texts = [...new Set(cueItems.map(({ text }) => text))];
+    resetTracking(texts);
+    const { fresh, failedTexts, error } = await requestTranslations(texts, { force: true });
+    if (fresh > 0) {
+      pauseObserver();
+      for (const { textSpan } of cueItems) {
+        if (textSpan.dataset.original) {
+          textSpan.textContent = textSpan.dataset.original;
+          delete textSpan.dataset.original;
+          delete textSpan.dataset.translated;
+        }
+        const parent = textSpan.closest("p") || textSpan.parentElement;
+        parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach((el) => el.remove());
       }
-      const parent = textSpan.closest("p") || textSpan.parentElement;
-      parent.querySelectorAll(`.${ORIGINAL_CLASS}`).forEach((el) => el.remove());
+      clearCaptionCache();
+      resumeObserver();
+      applyVttTranslations(panel);
     }
-    clearCaptionCache();
-    resumeObserver();
-    await requestTranslations(texts);
-    applyVttTranslations(panel);
-    const translated = collectCues(panel).filter(({ textSpan }) => textSpan.dataset.original);
-    return { count: translated.length };
+    return { count: fresh, failed: failedTexts.length, error: error?.code || null };
   }
   function cleanup2() {
     if (observer) observer.disconnect();
     if (panelFinderObserver) panelFinderObserver.disconnect();
     currentPanel = null;
     clearTimeout(settleTimer);
-    autoRequestedTexts.clear();
     clearCaptionCache();
   }
 
   // src/presentation/content/navigation-handler.js
   function onNavigate() {
     clearVttStore();
+    setBadgeError(null);
     cleanup2();
     cleanup();
     setTimeout(() => {
@@ -877,7 +988,10 @@
       statusNotRunning: "{provider} not running \u2014 run `node proxy-server/server.js` in a terminal",
       statusNeedKey: "Enter your {provider} API key",
       enableOn: "Translation on",
-      enableOff: "Translation off"
+      enableOff: "Translation off",
+      retranslateFailed: "Retranslate failed \xB7 {reason}",
+      retranslatePartial: "{count} retranslated \xB7 {failed} failed",
+      retranslateBlocked: "Daily limit reached \xB7 available after {time}"
     },
     settings: {
       model: "Model",
@@ -926,7 +1040,16 @@
       delLesson: "Delete cache for this lesson"
     },
     badge: {
-      translatingTo: "Translating to {lang}"
+      translatingTo: "Translating to {lang}",
+      error: {
+        RATE_LIMIT: "Rate limited \xB7 retrying soon",
+        QUOTA_DAILY: "Daily limit reached",
+        AUTH: "API key error",
+        BAD_REQUEST: "Request error \xB7 check settings",
+        NOT_RUNNING: "Proxy not running",
+        NO_API_KEY: "No API key",
+        generic: "Translation error \xB7 retrying"
+      }
     },
     model: {
       tier: {
@@ -935,6 +1058,61 @@
         balanced: "balanced",
         recommended: "recommended",
         highQuality: "high quality"
+      }
+    },
+    log: {
+      button: "Error log",
+      title: "Error log",
+      subtitle: "Last 10 \xB7 errors and slow requests",
+      empty: "No recent errors",
+      emptySub: "Problems during translation will show up here",
+      copy: "Copy",
+      copied: "Copied",
+      clear: "Clear",
+      count: "{total} entries",
+      detail: "Details",
+      lines: "{count} lines",
+      failedLines: "{failed}/{lines} lines failed",
+      took: "took {sec}s",
+      waited: "waited {sec}s",
+      retryAfter: "retry after {sec}s",
+      noLecture: "(no lecture info)",
+      summaryErrors: "{count} errors",
+      summaryWarns: "{count} warnings",
+      blockedBanner: "{provider} daily limit reached \u2014 resumes at {time}",
+      code: {
+        RATE_LIMIT: "Rate limit exceeded",
+        QUOTA_DAILY: "Daily limit reached",
+        AUTH: "API key error",
+        BAD_REQUEST: "Request rejected",
+        SERVER: "AI server error",
+        TIMEOUT: "Request timed out",
+        NETWORK: "Network error",
+        EMPTY_RESPONSE: "Empty response",
+        BLOCKED: "Blocked by safety filter",
+        MAX_TOKENS: "Response too long",
+        PARSE_ERROR: "Some lines failed",
+        NOT_RUNNING: "Proxy not running",
+        DISCONNECTED: "Extension disconnected",
+        SLOW: "Slow request",
+        UNKNOWN: "Unknown error"
+      },
+      hint: {
+        RATE_LIMIT: "Hit the per-minute limit. Retrying automatically with longer gaps.",
+        QUOTA_DAILY: "Today's request quota is used up. Translation resumes when the quota resets.",
+        AUTH: "The API key is invalid or lacks permission. Please check your key.",
+        BAD_REQUEST: "The request was rejected. Please check the model setting.",
+        SERVER: "The AI server is temporarily unstable. Retrying automatically.",
+        TIMEOUT: "The response took too long. Retrying automatically.",
+        NETWORK: "Please check your internet connection. Retrying automatically.",
+        EMPTY_RESPONSE: "Received an empty response. Retrying automatically.",
+        BLOCKED: "Lines blocked by the safety filter are left in the original language.",
+        MAX_TOKENS: "The response was cut off. The batch was split and resent.",
+        PARSE_ERROR: "Some lines couldn't be matched to the result. Retrying automatically.",
+        NOT_RUNNING: "The Claude Code proxy is not running. Start it from a terminal.",
+        DISCONNECTED: "Lost connection to the extension. Retrying automatically.",
+        SLOW: "The response was slow. If this keeps happening, you may be near a rate limit.",
+        UNKNOWN: "An unexpected error occurred. See the details below."
       }
     }
   };
@@ -961,7 +1139,10 @@
       statusNotRunning: "{provider} \uBBF8\uC2E4\uD589 \u2014 \uD130\uBBF8\uB110\uC5D0\uC11C node proxy-server/server.js \uC2E4\uD589 \uD544\uC694",
       statusNeedKey: "{provider} API \uD0A4\uB97C \uC785\uB825\uD558\uC138\uC694",
       enableOn: "\uBC88\uC5ED \uCF1C\uC9D0",
-      enableOff: "\uBC88\uC5ED \uAEBC\uC9D0"
+      enableOff: "\uBC88\uC5ED \uAEBC\uC9D0",
+      retranslateFailed: "\uC7AC\uBC88\uC5ED \uC2E4\uD328 \xB7 {reason}",
+      retranslatePartial: "{count}\uAC74 \uC7AC\uBC88\uC5ED \xB7 {failed}\uAC74 \uC2E4\uD328",
+      retranslateBlocked: "\uC77C\uC77C \uD55C\uB3C4 \uCD08\uACFC \xB7 {time} \uC774\uD6C4 \uAC00\uB2A5"
     },
     settings: {
       model: "\uBAA8\uB378",
@@ -1010,7 +1191,16 @@
       delLesson: "\uC774 \uB808\uC2A8 \uCE90\uC2DC \uC0AD\uC81C"
     },
     badge: {
-      translatingTo: "{lang} \uBC88\uC5ED \uC911"
+      translatingTo: "{lang} \uBC88\uC5ED \uC911",
+      error: {
+        RATE_LIMIT: "\uC694\uCCAD \uD55C\uB3C4 \xB7 \uC7A0\uC2DC \uD6C4 \uC7AC\uC2DC\uB3C4",
+        QUOTA_DAILY: "\uC77C\uC77C \uD55C\uB3C4 \uCD08\uACFC",
+        AUTH: "API \uD0A4 \uC624\uB958",
+        BAD_REQUEST: "\uC694\uCCAD \uC624\uB958 \xB7 \uC124\uC815 \uD655\uC778",
+        NOT_RUNNING: "\uD504\uB85D\uC2DC \uBBF8\uC2E4\uD589",
+        NO_API_KEY: "API \uD0A4 \uC5C6\uC74C",
+        generic: "\uBC88\uC5ED \uC624\uB958 \xB7 \uC7AC\uC2DC\uB3C4 \uC911"
+      }
     },
     model: {
       tier: {
@@ -1019,6 +1209,61 @@
         balanced: "\uADE0\uD615",
         recommended: "\uAD8C\uC7A5",
         highQuality: "\uACE0\uD488\uC9C8"
+      }
+    },
+    log: {
+      button: "\uC624\uB958 \uB85C\uADF8",
+      title: "\uC624\uB958 \uB85C\uADF8",
+      subtitle: "\uCD5C\uADFC 10\uAC74 \xB7 \uBC88\uC5ED \uC624\uB958\uC640 \uB290\uB9B0 \uC694\uCCAD",
+      empty: "\uCD5C\uADFC \uC624\uB958\uAC00 \uC5C6\uC5B4\uC694",
+      emptySub: "\uBC88\uC5ED \uC911 \uBB38\uC81C\uAC00 \uC0DD\uAE30\uBA74 \uC5EC\uAE30\uC5D0 \uAE30\uB85D\uB3FC\uC694",
+      copy: "\uBCF5\uC0AC",
+      copied: "\uBCF5\uC0AC\uB428",
+      clear: "\uBE44\uC6B0\uAE30",
+      count: "{total}\uAC74",
+      detail: "\uC0C1\uC138 \uBA54\uC2DC\uC9C0",
+      lines: "{count}\uC904",
+      failedLines: "{failed}/{lines}\uC904 \uC2E4\uD328",
+      took: "{sec}\uCD08 \uC18C\uC694",
+      waited: "\uB300\uAE30 {sec}\uCD08",
+      retryAfter: "{sec}\uCD08 \uD6C4 \uC7AC\uC2DC\uB3C4 \uAD8C\uC7A5",
+      noLecture: "(\uAC15\uC758 \uC815\uBCF4 \uC5C6\uC74C)",
+      summaryErrors: "\uC624\uB958 {count}",
+      summaryWarns: "\uACBD\uACE0 {count}",
+      blockedBanner: "{provider} \uC77C\uC77C \uD55C\uB3C4 \uCD08\uACFC \u2014 {time}\uC5D0 \uB2E4\uC2DC \uC2DC\uC791\uB3FC\uC694",
+      code: {
+        RATE_LIMIT: "\uBD84\uB2F9 \uC694\uCCAD \uD55C\uB3C4 \uCD08\uACFC",
+        QUOTA_DAILY: "\uC77C\uC77C \uD55C\uB3C4 \uCD08\uACFC",
+        AUTH: "API \uD0A4 \uC624\uB958",
+        BAD_REQUEST: "\uC694\uCCAD \uAC70\uBD80\uB428",
+        SERVER: "AI \uC11C\uBC84 \uC624\uB958",
+        TIMEOUT: "\uC751\uB2F5 \uC2DC\uAC04 \uCD08\uACFC",
+        NETWORK: "\uB124\uD2B8\uC6CC\uD06C \uC624\uB958",
+        EMPTY_RESPONSE: "\uBE48 \uC751\uB2F5",
+        BLOCKED: "\uC548\uC804 \uD544\uD130 \uCC28\uB2E8",
+        MAX_TOKENS: "\uC751\uB2F5 \uAE38\uC774 \uCD08\uACFC",
+        PARSE_ERROR: "\uC77C\uBD80 \uC904 \uBC88\uC5ED \uC2E4\uD328",
+        NOT_RUNNING: "\uD504\uB85D\uC2DC \uBBF8\uC2E4\uD589",
+        DISCONNECTED: "\uD655\uC7A5 \uC5F0\uACB0 \uB04A\uAE40",
+        SLOW: "\uB290\uB9B0 \uC694\uCCAD",
+        UNKNOWN: "\uC54C \uC218 \uC5C6\uB294 \uC624\uB958"
+      },
+      hint: {
+        RATE_LIMIT: "\uBD84\uB2F9 \uC694\uCCAD \uD55C\uB3C4\uC5D0 \uAC78\uB838\uC5B4\uC694. \uAC04\uACA9\uC744 \uB298\uB824 \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694.",
+        QUOTA_DAILY: "\uC624\uB298 \uC4F8 \uC218 \uC788\uB294 \uC694\uCCAD\uC744 \uBAA8\uB450 \uC37C\uC5B4\uC694. \uD55C\uB3C4\uAC00 \uCD08\uAE30\uD654\uB418\uBA74 \uB2E4\uC2DC \uBC88\uC5ED\uD560 \uC218 \uC788\uC5B4\uC694.",
+        AUTH: "API \uD0A4\uAC00 \uC798\uBABB\uB410\uAC70\uB098 \uAD8C\uD55C\uC774 \uC5C6\uC5B4\uC694. \uD0A4\uB97C \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694.",
+        BAD_REQUEST: "\uC694\uCCAD\uC774 \uAC70\uBD80\uB410\uC5B4\uC694. \uBAA8\uB378 \uC124\uC815\uC744 \uD655\uC778\uD574 \uC8FC\uC138\uC694.",
+        SERVER: "AI \uC11C\uBC84\uAC00 \uC77C\uC2DC\uC801\uC73C\uB85C \uBD88\uC548\uC815\uD574\uC694. \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694.",
+        TIMEOUT: "\uC751\uB2F5\uC774 \uB108\uBB34 \uC624\uB798 \uAC78\uB838\uC5B4\uC694. \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694.",
+        NETWORK: "\uC778\uD130\uB137 \uC5F0\uACB0\uC744 \uD655\uC778\uD574 \uC8FC\uC138\uC694. \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694.",
+        EMPTY_RESPONSE: "\uB0B4\uC6A9 \uC5C6\uB294 \uC751\uB2F5\uC744 \uBC1B\uC558\uC5B4\uC694. \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694.",
+        BLOCKED: "\uC548\uC804 \uD544\uD130\uC5D0 \uAC78\uB9B0 \uC904\uC740 \uBC88\uC5ED\uD558\uC9C0 \uC54A\uACE0 \uC6D0\uBB38\uC73C\uB85C \uB0A8\uACA8\uC694.",
+        MAX_TOKENS: "\uC751\uB2F5\uC774 \uAE38\uC5B4 \uC798\uB838\uC5B4\uC694. \uBB36\uC74C\uC744 \uB098\uB220 \uB2E4\uC2DC \uBCF4\uB0C8\uC5B4\uC694.",
+        PARSE_ERROR: "\uC77C\uBD80 \uC904\uC744 \uBC88\uC5ED \uACB0\uACFC\uC640 \uB9DE\uCD94\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694.",
+        NOT_RUNNING: "Claude Code \uD504\uB85D\uC2DC\uAC00 \uAEBC\uC838 \uC788\uC5B4\uC694. \uD130\uBBF8\uB110\uC5D0\uC11C \uD504\uB85D\uC2DC\uB97C \uC2E4\uD589\uD574 \uC8FC\uC138\uC694.",
+        DISCONNECTED: "\uD655\uC7A5 \uD504\uB85C\uADF8\uB7A8\uACFC \uC5F0\uACB0\uC774 \uB04A\uACBC\uC5B4\uC694. \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694.",
+        SLOW: "\uC751\uB2F5\uC774 \uB2A6\uAC8C \uC654\uC5B4\uC694. \uACC4\uC18D\uB418\uBA74 \uC694\uCCAD \uD55C\uB3C4\uC5D0 \uAC00\uAE4C\uC6CC\uC9C4 \uAC83\uC77C \uC218 \uC788\uC5B4\uC694.",
+        UNKNOWN: "\uC608\uC0C1\uD558\uC9C0 \uBABB\uD55C \uC624\uB958\uC608\uC694. \uC0C1\uC138 \uBA54\uC2DC\uC9C0\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694."
       }
     }
   };
@@ -1045,7 +1290,10 @@
       statusNotRunning: "{provider} \u672A\u8D77\u52D5 \u2014 \u30BF\u30FC\u30DF\u30CA\u30EB\u3067 node proxy-server/server.js \u3092\u5B9F\u884C\u3057\u3066\u304F\u3060\u3055\u3044",
       statusNeedKey: "{provider}\u306EAPI\u30AD\u30FC\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044",
       enableOn: "\u7FFB\u8A33\u30AA\u30F3",
-      enableOff: "\u7FFB\u8A33\u30AA\u30D5"
+      enableOff: "\u7FFB\u8A33\u30AA\u30D5",
+      retranslateFailed: "\u518D\u7FFB\u8A33\u5931\u6557 \xB7 {reason}",
+      retranslatePartial: "{count}\u4EF6\u518D\u7FFB\u8A33 \xB7 {failed}\u4EF6\u5931\u6557",
+      retranslateBlocked: "1\u65E5\u306E\u4E0A\u9650\u306B\u5230\u9054 \xB7 {time}\u4EE5\u964D\u306B\u5229\u7528\u53EF\u80FD"
     },
     settings: {
       model: "\u30E2\u30C7\u30EB",
@@ -1094,7 +1342,16 @@
       delLesson: "\u3053\u306E\u30EC\u30C3\u30B9\u30F3\u306E\u30AD\u30E3\u30C3\u30B7\u30E5\u3092\u524A\u9664"
     },
     badge: {
-      translatingTo: "{lang}\u306B\u7FFB\u8A33\u4E2D"
+      translatingTo: "{lang}\u306B\u7FFB\u8A33\u4E2D",
+      error: {
+        RATE_LIMIT: "\u30EA\u30AF\u30A8\u30B9\u30C8\u5236\u9650 \xB7 \u307E\u3082\u306A\u304F\u518D\u8A66\u884C",
+        QUOTA_DAILY: "1\u65E5\u306E\u4E0A\u9650\u306B\u5230\u9054",
+        AUTH: "API\u30AD\u30FC\u30A8\u30E9\u30FC",
+        BAD_REQUEST: "\u30EA\u30AF\u30A8\u30B9\u30C8\u30A8\u30E9\u30FC \xB7 \u8A2D\u5B9A\u3092\u78BA\u8A8D",
+        NOT_RUNNING: "\u30D7\u30ED\u30AD\u30B7\u672A\u8D77\u52D5",
+        NO_API_KEY: "API\u30AD\u30FC\u672A\u8A2D\u5B9A",
+        generic: "\u7FFB\u8A33\u30A8\u30E9\u30FC \xB7 \u518D\u8A66\u884C\u4E2D"
+      }
     },
     model: {
       tier: {
@@ -1103,6 +1360,61 @@
         balanced: "\u30D0\u30E9\u30F3\u30B9",
         recommended: "\u63A8\u5968",
         highQuality: "\u9AD8\u54C1\u8CEA"
+      }
+    },
+    log: {
+      button: "\u30A8\u30E9\u30FC\u30ED\u30B0",
+      title: "\u30A8\u30E9\u30FC\u30ED\u30B0",
+      subtitle: "\u6700\u65B010\u4EF6 \xB7 \u7FFB\u8A33\u30A8\u30E9\u30FC\u3068\u9045\u3044\u30EA\u30AF\u30A8\u30B9\u30C8",
+      empty: "\u6700\u8FD1\u306E\u30A8\u30E9\u30FC\u306F\u3042\u308A\u307E\u305B\u3093",
+      emptySub: "\u7FFB\u8A33\u4E2D\u306B\u554F\u984C\u304C\u8D77\u304D\u308B\u3068\u3053\u3053\u306B\u8A18\u9332\u3055\u308C\u307E\u3059",
+      copy: "\u30B3\u30D4\u30FC",
+      copied: "\u30B3\u30D4\u30FC\u3057\u307E\u3057\u305F",
+      clear: "\u30AF\u30EA\u30A2",
+      count: "{total}\u4EF6",
+      detail: "\u8A73\u7D30\u30E1\u30C3\u30BB\u30FC\u30B8",
+      lines: "{count}\u884C",
+      failedLines: "{failed}/{lines}\u884C\u5931\u6557",
+      took: "{sec}\u79D2\u304B\u304B\u308A\u307E\u3057\u305F",
+      waited: "{sec}\u79D2\u5F85\u6A5F",
+      retryAfter: "{sec}\u79D2\u5F8C\u306B\u518D\u8A66\u884C\u63A8\u5968",
+      noLecture: "(\u30EC\u30AF\u30C1\u30E3\u30FC\u60C5\u5831\u306A\u3057)",
+      summaryErrors: "\u30A8\u30E9\u30FC {count}",
+      summaryWarns: "\u8B66\u544A {count}",
+      blockedBanner: "{provider} \u306E1\u65E5\u306E\u4E0A\u9650\u306B\u5230\u9054 \u2014 {time}\u306B\u518D\u958B\u3057\u307E\u3059",
+      code: {
+        RATE_LIMIT: "\u5206\u9593\u30EA\u30AF\u30A8\u30B9\u30C8\u4E0A\u9650\u8D85\u904E",
+        QUOTA_DAILY: "1\u65E5\u306E\u4E0A\u9650\u306B\u5230\u9054",
+        AUTH: "API\u30AD\u30FC\u30A8\u30E9\u30FC",
+        BAD_REQUEST: "\u30EA\u30AF\u30A8\u30B9\u30C8\u62D2\u5426",
+        SERVER: "AI\u30B5\u30FC\u30D0\u30FC\u30A8\u30E9\u30FC",
+        TIMEOUT: "\u5FDC\u7B54\u30BF\u30A4\u30E0\u30A2\u30A6\u30C8",
+        NETWORK: "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u30A8\u30E9\u30FC",
+        EMPTY_RESPONSE: "\u7A7A\u306E\u5FDC\u7B54",
+        BLOCKED: "\u5B89\u5168\u30D5\u30A3\u30EB\u30BF\u30FC\u3067\u30D6\u30ED\u30C3\u30AF",
+        MAX_TOKENS: "\u5FDC\u7B54\u306E\u9577\u3055\u8D85\u904E",
+        PARSE_ERROR: "\u4E00\u90E8\u306E\u884C\u306E\u7FFB\u8A33\u306B\u5931\u6557",
+        NOT_RUNNING: "\u30D7\u30ED\u30AD\u30B7\u672A\u8D77\u52D5",
+        DISCONNECTED: "\u62E1\u5F35\u6A5F\u80FD\u3068\u306E\u63A5\u7D9A\u5207\u308C",
+        SLOW: "\u9045\u3044\u30EA\u30AF\u30A8\u30B9\u30C8",
+        UNKNOWN: "\u4E0D\u660E\u306A\u30A8\u30E9\u30FC"
+      },
+      hint: {
+        RATE_LIMIT: "\u5206\u9593\u306E\u4E0A\u9650\u306B\u9054\u3057\u307E\u3057\u305F\u3002\u9593\u9694\u3092\u7A7A\u3051\u3066\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002",
+        QUOTA_DAILY: "\u4ECA\u65E5\u306E\u30EA\u30AF\u30A8\u30B9\u30C8\u4E0A\u9650\u3092\u4F7F\u3044\u5207\u308A\u307E\u3057\u305F\u3002\u4E0A\u9650\u304C\u30EA\u30BB\u30C3\u30C8\u3055\u308C\u308B\u3068\u518D\u958B\u3057\u307E\u3059\u3002",
+        AUTH: "API\u30AD\u30FC\u304C\u7121\u52B9\u304B\u6A29\u9650\u304C\u3042\u308A\u307E\u305B\u3093\u3002\u30AD\u30FC\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+        BAD_REQUEST: "\u30EA\u30AF\u30A8\u30B9\u30C8\u304C\u62D2\u5426\u3055\u308C\u307E\u3057\u305F\u3002\u30E2\u30C7\u30EB\u8A2D\u5B9A\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+        SERVER: "AI\u30B5\u30FC\u30D0\u30FC\u304C\u4E00\u6642\u7684\u306B\u4E0D\u5B89\u5B9A\u3067\u3059\u3002\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002",
+        TIMEOUT: "\u5FDC\u7B54\u306B\u6642\u9593\u304C\u304B\u304B\u308A\u3059\u304E\u307E\u3057\u305F\u3002\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002",
+        NETWORK: "\u30A4\u30F3\u30BF\u30FC\u30CD\u30C3\u30C8\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002",
+        EMPTY_RESPONSE: "\u7A7A\u306E\u5FDC\u7B54\u3092\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002",
+        BLOCKED: "\u5B89\u5168\u30D5\u30A3\u30EB\u30BF\u30FC\u306B\u8A72\u5F53\u3057\u305F\u884C\u306F\u539F\u6587\u306E\u307E\u307E\u6B8B\u3057\u307E\u3059\u3002",
+        MAX_TOKENS: "\u5FDC\u7B54\u304C\u9014\u4E2D\u3067\u5207\u308C\u307E\u3057\u305F\u3002\u5206\u5272\u3057\u3066\u518D\u9001\u3057\u307E\u3057\u305F\u3002",
+        PARSE_ERROR: "\u4E00\u90E8\u306E\u884C\u3092\u7FFB\u8A33\u7D50\u679C\u3068\u5BFE\u5FDC\u4ED8\u3051\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002",
+        NOT_RUNNING: "Claude Code \u30D7\u30ED\u30AD\u30B7\u304C\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002\u30BF\u30FC\u30DF\u30CA\u30EB\u3067\u8D77\u52D5\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+        DISCONNECTED: "\u62E1\u5F35\u6A5F\u80FD\u3068\u306E\u63A5\u7D9A\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002",
+        SLOW: "\u5FDC\u7B54\u304C\u9045\u308C\u307E\u3057\u305F\u3002\u7D9A\u304F\u5834\u5408\u306F\u30EA\u30AF\u30A8\u30B9\u30C8\u4E0A\u9650\u306B\u8FD1\u3044\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059\u3002",
+        UNKNOWN: "\u4E88\u671F\u3057\u306A\u3044\u30A8\u30E9\u30FC\u3067\u3059\u3002\u8A73\u7D30\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
       }
     }
   };
@@ -1119,6 +1431,19 @@
       }
       const panel = document.querySelector(SELECTORS.panel);
       if (panel) scheduleTranslation(panel);
+    }
+    const RETRY_ON_CHANGE = [
+      STORAGE_KEYS.PROVIDER,
+      STORAGE_KEYS.GEMINI_API_KEY,
+      STORAGE_KEYS.CLAUDE_API_KEY,
+      STORAGE_KEYS.CLAUDE_CODE_URL,
+      STORAGE_KEYS.GEMINI_MODEL,
+      STORAGE_KEYS.CLAUDE_MODEL,
+      STORAGE_KEYS.CLAUDE_CODE_MODEL
+    ];
+    if (changes[STORAGE_KEYS.ENABLED]?.newValue !== false && [STORAGE_KEYS.ENABLED, ...RETRY_ON_CHANGE].some((k) => changes[k] && changes[k].oldValue !== changes[k].newValue)) {
+      setBadgeError(null);
+      resetFailures();
     }
     if (changes[STORAGE_KEYS.TARGET_LANG]) {
       const code = resolveCode(changes[STORAGE_KEYS.TARGET_LANG].newValue);
@@ -1145,6 +1470,11 @@
     if (message.type === "GET_LECTURE_INFO") {
       sendResponse(getLectureContext());
     }
+  });
+  onRequestStatus(({ key, error, failedCount, okCount }) => {
+    if (key !== currentLectureKey()) return;
+    if (error && error.code !== "PARSE_ERROR" && error.code !== "DISABLED") setBadgeError(error.code);
+    else if (failedCount === 0 || okCount > 0) setBadgeError(null);
   });
   setupNavigationHandler();
   console.log("[UdemyTranslator] content script loaded");

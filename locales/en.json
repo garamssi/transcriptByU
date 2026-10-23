@@ -19,7 +19,10 @@
     "statusNotRunning": "{provider} not running — run `node proxy-server/server.js` in a terminal",
     "statusNeedKey": "Enter your {provider} API key",
     "enableOn": "Translation on",
-    "enableOff": "Translation off"
+    "enableOff": "Translation off",
+    "retranslateFailed": "Retranslate failed · {reason}",
+    "retranslatePartial": "{count} retranslated · {failed} failed",
+    "retranslateBlocked": "Daily limit reached · available after {time}"
   },
   "settings": {
     "model": "Model",
@@ -68,7 +71,16 @@
     "delLesson": "Delete cache for this lesson"
   },
   "badge": {
-    "translatingTo": "Translating to {lang}"
+    "translatingTo": "Translating to {lang}",
+    "error": {
+      "RATE_LIMIT": "Rate limited · retrying soon",
+      "QUOTA_DAILY": "Daily limit reached",
+      "AUTH": "API key error",
+      "BAD_REQUEST": "Request error · check settings",
+      "NOT_RUNNING": "Proxy not running",
+      "NO_API_KEY": "No API key",
+      "generic": "Translation error · retrying"
+    }
   },
   "model": {
     "tier": {
@@ -77,6 +89,61 @@
       "balanced": "balanced",
       "recommended": "recommended",
       "highQuality": "high quality"
+    }
+  },
+  "log": {
+    "button": "Error log",
+    "title": "Error log",
+    "subtitle": "Last 10 · errors and slow requests",
+    "empty": "No recent errors",
+    "emptySub": "Problems during translation will show up here",
+    "copy": "Copy",
+    "copied": "Copied",
+    "clear": "Clear",
+    "count": "{total} entries",
+    "detail": "Details",
+    "lines": "{count} lines",
+    "failedLines": "{failed}/{lines} lines failed",
+    "took": "took {sec}s",
+    "waited": "waited {sec}s",
+    "retryAfter": "retry after {sec}s",
+    "noLecture": "(no lecture info)",
+    "summaryErrors": "{count} errors",
+    "summaryWarns": "{count} warnings",
+    "blockedBanner": "{provider} daily limit reached — resumes at {time}",
+    "code": {
+      "RATE_LIMIT": "Rate limit exceeded",
+      "QUOTA_DAILY": "Daily limit reached",
+      "AUTH": "API key error",
+      "BAD_REQUEST": "Request rejected",
+      "SERVER": "AI server error",
+      "TIMEOUT": "Request timed out",
+      "NETWORK": "Network error",
+      "EMPTY_RESPONSE": "Empty response",
+      "BLOCKED": "Blocked by safety filter",
+      "MAX_TOKENS": "Response too long",
+      "PARSE_ERROR": "Some lines failed",
+      "NOT_RUNNING": "Proxy not running",
+      "DISCONNECTED": "Extension disconnected",
+      "SLOW": "Slow request",
+      "UNKNOWN": "Unknown error"
+    },
+    "hint": {
+      "RATE_LIMIT": "Hit the per-minute limit. Retrying automatically with longer gaps.",
+      "QUOTA_DAILY": "Today's request quota is used up. Translation resumes when the quota resets.",
+      "AUTH": "The API key is invalid or lacks permission. Please check your key.",
+      "BAD_REQUEST": "The request was rejected. Please check the model setting.",
+      "SERVER": "The AI server is temporarily unstable. Retrying automatically.",
+      "TIMEOUT": "The response took too long. Retrying automatically.",
+      "NETWORK": "Please check your internet connection. Retrying automatically.",
+      "EMPTY_RESPONSE": "Received an empty response. Retrying automatically.",
+      "BLOCKED": "Lines blocked by the safety filter are left in the original language.",
+      "MAX_TOKENS": "The response was cut off. The batch was split and resent.",
+      "PARSE_ERROR": "Some lines couldn't be matched to the result. Retrying automatically.",
+      "NOT_RUNNING": "The Claude Code proxy is not running. Start it from a terminal.",
+      "DISCONNECTED": "Lost connection to the extension. Retrying automatically.",
+      "SLOW": "The response was slow. If this keeps happening, you may be near a rate limit.",
+      "UNKNOWN": "An unexpected error occurred. See the details below."
     }
   }
 }
