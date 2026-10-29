@@ -1,4 +1,4 @@
-import { ApiError, ERROR_CODES, classifyClaudeHttpError, extractClaudeText } from '../../domain/api-error.js';
+import { ApiError, fetchErrorCode, classifyClaudeHttpError, extractClaudeText } from '../../domain/api-error.js';
 import { API_REQUEST_TIMEOUT_MS } from '../../domain/constants.js';
 
 /**
@@ -31,8 +31,7 @@ export async function callClaude(systemPrompt, userText, apiKey, model, maxToken
       signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
     });
   } catch (e) {
-    const code = e?.name === 'TimeoutError' || e?.name === 'AbortError' ? ERROR_CODES.TIMEOUT : ERROR_CODES.NETWORK;
-    throw new ApiError(code, { detail: e?.message });
+    throw new ApiError(fetchErrorCode(e), { detail: e?.message });
   }
 
   if (!response.ok) {

@@ -1077,6 +1077,8 @@ mark.cache-hl {
   background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015));
   border: 1px solid rgba(255,255,255,.07);
   overflow: hidden;
+  /* flex 열 안에서 overflow:hidden 이면 최소 높이가 0 이 돼, 로그가 쌓이면 스크롤 대신 카드가 찌그러진다 */
+  flex-shrink: 0;
   animation: logIn 220ms ease both;
 }
 .log-card::before {

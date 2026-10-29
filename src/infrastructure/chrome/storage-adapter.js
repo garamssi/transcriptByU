@@ -1,4 +1,5 @@
 import { MODELS } from '../../domain/constants.js';
+import { sanitizeApiKey } from '../../domain/api-error.js';
 
 /**
  * chrome.storage.local 래퍼
@@ -23,13 +24,14 @@ export async function getProviderConfig() {
   let apiKey, model;
 
   if (provider === 'gemini') {
-    apiKey = stored.geminiApiKey;
+    apiKey = sanitizeApiKey(stored.geminiApiKey);
     model = stored.geminiModel || stored.model || 'gemini-3.8-flash';
   } else if (provider === 'claude-code') {
     apiKey = stored.claudeCodeUrl || 'http://localhost:3456';
     model = stored.claudeCodeModel || 'claude-sonnet-5-5';
   } else {
-    apiKey = stored.claudeApiKey || stored.apiKey;
+    // 저장 시 검사가 생기기 전에 저장된 키에도 공백·제로폭 문자가 섞여 있을 수 있어 읽을 때도 정리한다.
+    apiKey = sanitizeApiKey(stored.claudeApiKey || stored.apiKey);
     model = stored.claudeModel || stored.model || 'claude-haiku-5-5';
   }
 

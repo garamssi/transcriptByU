@@ -23,6 +23,29 @@ export const ERROR_CODES = Object.freeze({
 
 const C = ERROR_CODES;
 
+/**
+ * API 키에서 붙여넣기에 섞인 공백·제로폭 문자를 제거한다.
+ * @param {string} key
+ * @returns {string}
+ */
+export function sanitizeApiKey(key) {
+  return (key || '').replace(/[\s​-‍⁠﻿]/g, '');
+}
+
+/** HTTP 헤더에 실을 수 없는 문자(한글 등 비 ASCII)가 키에 있는지 */
+export const hasInvalidKeyChars = (key) => /[^!-~]/.test(key || '');
+
+/**
+ * fetch 자체가 throw 한 오류의 코드. 키에 비 ASCII 가 있으면 헤더 생성 단계에서
+ * "non ISO-8859-1 code point" TypeError 가 나는데, 이는 네트워크가 아니라 키 문제라
+ * 재시도해도 소용없으므로 AUTH 로 분류한다.
+ */
+export function fetchErrorCode(e) {
+  if (e?.name === 'TimeoutError' || e?.name === 'AbortError') return C.TIMEOUT;
+  if (/ISO-8859-1/i.test(e?.message || '')) return C.AUTH;
+  return C.NETWORK;
+}
+
 /** 남은 청크를 보내도 같은 결과가 나오는 오류 — 즉시 중단한다. */
 const FATAL = new Set([C.QUOTA_DAILY, C.AUTH, C.BAD_REQUEST, C.NOT_RUNNING, C.RATE_LIMIT]);
 /** 잠시 후 같은 요청을 다시 보내면 성공할 수 있는 오류 — 자동 재시도 대상. */
@@ -55,11 +78,8 @@ export const isTransientCode = (code) => TRANSIENT.has(code);
 /** 임의의 throw 값을 ApiError 로 정규화한다. */
 export function toApiError(err) {
   if (err instanceof ApiError) return err;
-  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
-    return new ApiError(C.TIMEOUT, { detail: err.message });
-  }
-  if (err instanceof TypeError && /fetch|network/i.test(err.message)) {
-    return new ApiError(C.NETWORK, { detail: err.message });
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || (err instanceof TypeError && /fetch|network/i.test(err.message))) {
+    return new ApiError(fetchErrorCode(err), { detail: err.message });
   }
   return new ApiError(C.UNKNOWN, { detail: err?.message || String(err) });
 }

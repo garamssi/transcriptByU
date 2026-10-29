@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import {
   ERROR_CODES as C, classifyGeminiHttpError, extractGeminiText, classifyClaudeHttpError,
   extractClaudeText, nextPacificMidnight, parseDurationMs, redactSecrets, isFatalCode,
+  sanitizeApiKey, hasInvalidKeyChars, fetchErrorCode, toApiError,
 } from '../src/domain/api-error.js';
 
 const gemini429 = (quotaId, retryDelay = '43s') => JSON.stringify({
@@ -67,4 +68,14 @@ test('유틸: 기간 파싱·비밀값 가림·태평양 자정', () => {
   assert.strictEqual(redactSecrets('k AIzaSyABCDEFGHIJKLMNOPQRSTUVWX'), 'k AIza***');
   const now = Date.UTC(2026, 0, 15, 10, 30, 0); // PST 02:30
   assert.strictEqual(nextPacificMidnight(now), Date.UTC(2026, 0, 16, 8, 0, 0));
+});
+
+test('API 키: 공백·제로폭 제거, 비 ASCII 헤더 오류는 AUTH', () => {
+  assert.strictEqual(sanitizeApiKey(' AIza​key\n'), 'AIzakey');
+  assert.strictEqual(hasInvalidKeyChars('AIza키'), true);
+  assert.strictEqual(hasInvalidKeyChars('AIzaSy-_0'), false);
+  const headerErr = new TypeError("Failed to execute 'fetch' on 'WorkerGlobalScope': Failed to read the 'headers' property from 'RequestInit': String contains non ISO-8859-1 code point.");
+  assert.strictEqual(fetchErrorCode(headerErr), C.AUTH);
+  assert.strictEqual(toApiError(headerErr).code, C.AUTH);
+  assert.strictEqual(fetchErrorCode(new TypeError('Failed to fetch')), C.NETWORK);
 });

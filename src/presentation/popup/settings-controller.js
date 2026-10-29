@@ -3,6 +3,7 @@ import { checkClaudeCodeConnection } from '../../infrastructure/api/claude-code-
 import { t, applyI18n, setLocale, getLocale } from '../../shared/i18n.js';
 import { LANGUAGES, TARGET_CODES, UI_CODES, resolveCode } from '../../domain/languages.js';
 import { getActiveBlocks, formatResumeTime } from './error-log-dialog.js';
+import { sanitizeApiKey, hasInvalidKeyChars } from '../../domain/api-error.js';
 
 /**
  * 설정 UI를 초기화한다.
@@ -208,9 +209,9 @@ export async function initSettingsController($, updatePreview) {
       const keyInput = currentProvider === 'claude' ? claudeApiKeyInput : geminiApiKeyInput;
       // 붙여넣기에 섞인 공백·제로폭 문자는 제거한다. 한글 등 비 ASCII 가 남으면 HTTP 헤더에
       // 실을 수 없어 fetch 가 매 요청 실패하므로(ISO-8859-1 오류) 저장하지 않는다.
-      const key = keyInput.value.replace(/[\s​-‍⁠﻿]/g, '');
+      const key = sanitizeApiKey(keyInput.value);
       if (!key) return;
-      if (/[^!-~]/.test(key)) {
+      if (hasInvalidKeyChars(key)) {
         saveStatus.textContent = t('popup.invalidKey');
         setTimeout(() => { saveStatus.textContent = ''; }, 3000);
         return;
