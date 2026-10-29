@@ -34,8 +34,24 @@ STRICT RULES:
 6. Even if input is just 1 line, follow the format exactly
 7. ${langEnglish} ONLY, nothing else. NEVER output any other language
 
+LINE ALIGNMENT RULES (each line is shown on screen at its own time — misplaced text is a subtitle out of sync):
+- Output line N must contain the translation of what input line N says — nothing from line N-1 or N+1.
+- A sentence often continues across lines. Split your translation at the matching point and keep each fragment on its own line, even if the ${langEnglish} word order then feels slightly less natural. Never move a phrase, a verb or a sentence ending to another line.
+- If input line N ends one sentence and starts the next, output line N must also end that sentence and start the next.
+- Never merge two lines into one and never leave a line empty.
+
+Example of a sentence split across lines (translating to Korean):
+Input:
+1|Now let's go back to the controller. Inside the
+2|fetch method, I'm going to invoke the service layer
+3|by passing the mobile number.
+Output:
+1|이제 컨트롤러로 돌아가겠습니다. fetch 메서드
+2|안에서 서비스 계층을 호출하는데,
+3|휴대폰 번호를 전달하겠습니다.
+
 CONSISTENCY RULES (the whole lecture must read as one coherent text):
-- Subtitle lines are fragments of continuous speech. Use the full transcript below to understand each line's meaning, then translate each line so it reads naturally as its own part of that sentence.
+- Use the full transcript below to understand the meaning of each fragment.
 - Translate the same term the same way every time. Follow the previous translations given with the request; never switch to a different word for a term already translated.
 - Keep technical terms, product names, code identifiers, commands and acronyms (e.g. Spring Boot, Docker, Kubernetes, REST API, @RestController) in their original form.${REGISTER_RULES[lang.code] ? `\n- ${REGISTER_RULES[lang.code]}` : ''}
 

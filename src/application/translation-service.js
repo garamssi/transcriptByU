@@ -271,9 +271,17 @@ export class TranslationService {
         return;
       }
       const chunkResult = {};
+      // 아직 반영하지 않은 번역만 결과·캐시에 넣고 화면에 알린다(청크끼리 원문이 겹치지 않음).
+      const commit = async () => {
+        const fresh = Object.fromEntries(Object.entries(chunkResult).filter(([t]) => !(t in translations)));
+        Object.assign(translations, fresh);
+        if (Object.keys(fresh).length > 0) await job.persist(fresh);
+      };
       try {
         let failed = await this._translateAndParse(chunk, job, chunkResult);
         if (failed.length > 0) {
+          // 성공한 줄은 재시도를 기다리지 않고 먼저 반영한다(첫 청크의 한두 줄 실패가 첫 화면을 늦추지 않게).
+          await commit();
           console.log(`[UdemyTranslator:${job.provider}] Retrying ${failed.length} failed texts`);
           if (job.provider !== 'claude-code' && this.cloudRetryDelayMs > 0) {
             await new Promise(r => setTimeout(r, this.cloudRetryDelayMs));
@@ -287,8 +295,7 @@ export class TranslationService {
         }
       } catch (raw) {
         const err = toApiError(raw);
-        Object.assign(translations, chunkResult);
-        if (Object.keys(chunkResult).length > 0) await job.persist(chunkResult);
+        await commit();
         // 출력 한도 초과·안전 필터는 같은 입력을 다시 보내도 같으므로, 반으로 나눠 범위를 좁힌다.
         const splittable = err.code === ERROR_CODES.MAX_TOKENS || err.code === ERROR_CODES.BLOCKED;
         const rest = chunk.filter(t => !chunkResult[t]);
@@ -308,13 +315,15 @@ export class TranslationService {
         }
         return;
       }
-      Object.assign(translations, chunkResult);
-      if (Object.keys(chunkResult).length > 0) await job.persist(chunkResult);
+      await commit();
     };
 
     if (job.provider === 'claude-code') {
+      // 첫 청크(작은 청크)를 먼저 끝내 첫 화면을 앞당기고, 그 번역을 참고로 삼아 나머지를 병렬로 보낸다.
+      // 전부 동시에 보내면 청크끼리 서로의 번역을 못 봐 같은 용어가 청크마다 달라진다.
       // 청크마다 오류를 내부에서 처리하므로 하나가 실패해도 나머지 결과는 유지된다.
-      await Promise.all(chunks.map(c => translateChunk(c)));
+      await translateChunk(chunks[0]);
+      await Promise.all(chunks.slice(1).map(c => translateChunk(c)));
     } else {
       for (const chunk of chunks) await translateChunk(chunk);
     }
