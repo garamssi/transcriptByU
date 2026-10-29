@@ -26,6 +26,29 @@ const appliedText = new WeakMap();
 // 대본/VTT 키와 같은 정규화(공백·줄바꿈 → 공백 1개) — 여러 줄 큐도 번역을 찾게 한다
 const normalize = s => s.replace(/\s+/g, ' ').trim();
 
+// 진단용: 최근 영상 자막 조회 기록(최대 20건). 자막이 원문으로 남는 원인을 실제 화면 데이터로 확인한다.
+const lookupLog = [];
+function logLookup(entry) {
+  lookupLog.push({ at: new Date().toISOString().slice(11, 23), ...entry });
+  if (lookupLog.length > 20) lookupLog.shift();
+}
+
+/** 진단 정보: 현재 캡션 요소 상태와 최근 조회 기록 */
+export function getCaptionDebug() {
+  const liveEl = document.querySelector(CAPTION_SELECTOR);
+  return {
+    observedElementIsLive: !!currentCaptionEl && currentCaptionEl === liveEl,
+    observedElementConnected: !!currentCaptionEl?.isConnected,
+    liveElementHtml: liveEl ? liveEl.outerHTML.slice(0, 400) : null,
+    applied: liveEl ? appliedText.get(liveEl) || null : null,
+    recentLookups: [...lookupLog],
+  };
+}
+
+export function getCaptionCacheEntry(text) {
+  return translationMapCache.has(text) ? translationMapCache.get(text) : null;
+}
+
 // Udemy(React)가 소유한 텍스트 노드들(.caption-original 안은 제외).
 function ownTextNodes(captionEl) {
   const nodes = [];
@@ -89,7 +112,9 @@ export function replaceCaptionText(captionEl) {
 
   // 영상 자막은 재생 시각으로 큐 위치를 고르는 getVttTranslation 이 우선이다(같은 텍스트의 큐가
   // 강의에 여러 번 나오면 텍스트만으로 찾는 캐시는 다른 문장을 줄 수 있다).
-  const translated = getVttTranslation(originalText) || translationMapCache.get(originalText);
+  const fromTranscript = getVttTranslation(originalText);
+  const translated = fromTranscript || translationMapCache.get(originalText);
+  logLookup({ text: originalText.slice(0, 120), via: fromTranscript ? 'transcript' : translated ? 'panelCache' : null });
   if (!translated) {
     // 번역 없음: 원본이 이미 목표 언어면(백그라운드 스킵 대상, 예: 한국어 자막 → 한국어)
     // '번역 중' 배지를 숨기고, 아직 번역 전인 외국어면 배지를 표시한 채 원본을 유지한다.

@@ -543,39 +543,46 @@ async function retryDue() {
 }
 
 /**
- * 대본 줄과 정확히 일치하지 않는 영상 자막 텍스트가 속한 문장 단위들.
- * 1) 텍스트를 통째로 품은 문장, 2) 없으면 텍스트 앞·뒤 절반을 각각 품은 문장(두 문장에 걸친 자막).
- * 같은 텍스트가 여러 문장에 있으면 직전에 보여 준 위치와 가장 가까운 문장을 고른다.
- * @returns {number[]} 단위 인덱스(순서대로), 못 찾으면 []
+ * 진단 정보: 현재 강의의 대본·문장 단위·번역 저장 상태와, 주어진 영상 자막 텍스트가 대본 어디와 맞는지.
+ * (조회 위치 상태를 바꾸지 않도록 resolveCaptionIndex 를 쓰지 않는다)
+ * @param {string} captionText - 정규화된 영상 자막 원문
  */
-const unmatchedLogged = new Set();
-function matchUnitsByText(entry, text) {
-  const { units, unitCues } = entry.seg;
-  const nearest = (pred) => {
-    let best = -1;
-    units.forEach((u, k) => {
-      if (!pred(u)) return;
-      if (best === -1 || Math.abs(unitCues[k][0] - lastCaptionIndex) < Math.abs(unitCues[best][0] - lastCaptionIndex)) best = k;
-    });
-    return best;
+export function getDiagnostics(captionText) {
+  const key = currentLectureKey();
+  const entry = scriptEntry(key);
+  const bucket = buckets.get(key);
+  const track = tracker.get(key);
+  const states = {};
+  track?.forEach(s => { states[s.state] = (states[s.state] || 0) + 1; });
+  const unitInfo = u => ({
+    text: entry.seg.units[u].slice(0, 120),
+    translated: !!bucket?.has(entry.seg.units[u]),
+    state: track?.get(entry.seg.units[u])?.state || null,
+  });
+  const positions = captionText && entry ? entry.positions.get(captionText) || null : null;
+  const head = captionText ? captionText.split(' ').slice(0, 3).join(' ') : '';
+  return {
+    lectureKey: key,
+    vttUrlsProcessed: [...processedUrls].map(u => u.slice(0, 140)),
+    script: entry ? {
+      source: entry.source,
+      lines: entry.lines.length,
+      hasTimes: !!entry.times,
+      first3: entry.lines.slice(0, 3),
+      units: entry.seg.units.length,
+      unitsTranslated: entry.seg.units.filter(u => bucket?.has(u)).length,
+    } : null,
+    bucketSize: bucket?.size || 0,
+    trackerStates: states,
+    caption: captionText ? {
+      exactMatchPositions: positions,
+      unitsAtFirstMatch: positions ? entry.seg.cueUnits[positions[0]].map(unitInfo) : [],
+      bucketHasCaptionTextItself: !!bucket?.has(captionText),
+      scriptLinesStartingSimilarly: entry && head
+        ? entry.lines.map((l, i) => [i, l]).filter(([, l]) => l.includes(head)).slice(0, 5)
+        : [],
+    } : null,
   };
-  let found = [];
-  const whole = nearest(u => u.includes(text));
-  if (whole !== -1) found = [whole];
-  else {
-    const words = text.split(' ');
-    if (words.length >= 4) {
-      const head = nearest(u => u.includes(words.slice(0, Math.ceil(words.length / 2)).join(' ')));
-      const tail = nearest(u => u.includes(words.slice(Math.floor(words.length / 2)).join(' ')));
-      found = [...new Set([head, tail].filter(k => k !== -1))].sort((a, b) => a - b);
-    }
-  }
-  if (found.length > 0) lastCaptionIndex = unitCues[found[0]][0];
-  else if (!unmatchedLogged.has(text)) {
-    unmatchedLogged.add(text);
-    console.warn(`[UdemyTranslator] caption text not found in transcript: "${text.slice(0, 80)}"`);
-  }
-  return found;
 }
 
 /**
@@ -594,9 +601,7 @@ export function getVttTranslation(text, key = currentLectureKey(), { panel = fal
   if (!bucket) return null;
   const entry = scriptEntry(key);
   const i = index ?? (entry && (panel ? entry.positions.get(text)?.[0] : resolveCaptionIndex(entry, text)));
-  let us = i === undefined ? [] : entry.seg.cueUnits[i];
-  // 영상 자막 텍스트가 대본 줄과 똑같지 않으면(패널·VTT 와 줄 나눔이 다른 경우) 그 텍스트를 품은 문장을 찾는다.
-  if (us.length === 0 && entry && !panel && index === undefined) us = matchUnitsByText(entry, text);
+  const us = i === undefined ? [] : entry.seg.cueUnits[i];
   if (us.length === 0) return bucket.get(text) || null; // 대본에 없는 큐: 큐 자체가 단위
   const parts = [];
   for (const u of us) {

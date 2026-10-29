@@ -746,42 +746,49 @@
       console.error(`[UdemyTranslator:VTT] auto-retry error: ${err?.message || err}`);
     }
   }
-  var unmatchedLogged = /* @__PURE__ */ new Set();
-  function matchUnitsByText(entry, text) {
-    const { units, unitCues } = entry.seg;
-    const nearest = (pred) => {
-      let best = -1;
-      units.forEach((u, k) => {
-        if (!pred(u)) return;
-        if (best === -1 || Math.abs(unitCues[k][0] - lastCaptionIndex) < Math.abs(unitCues[best][0] - lastCaptionIndex)) best = k;
-      });
-      return best;
+  function getDiagnostics(captionText) {
+    const key = currentLectureKey();
+    const entry = scriptEntry(key);
+    const bucket = buckets.get(key);
+    const track = tracker.get(key);
+    const states = {};
+    track?.forEach((s) => {
+      states[s.state] = (states[s.state] || 0) + 1;
+    });
+    const unitInfo = (u) => ({
+      text: entry.seg.units[u].slice(0, 120),
+      translated: !!bucket?.has(entry.seg.units[u]),
+      state: track?.get(entry.seg.units[u])?.state || null
+    });
+    const positions = captionText && entry ? entry.positions.get(captionText) || null : null;
+    const head = captionText ? captionText.split(" ").slice(0, 3).join(" ") : "";
+    return {
+      lectureKey: key,
+      vttUrlsProcessed: [...processedUrls].map((u) => u.slice(0, 140)),
+      script: entry ? {
+        source: entry.source,
+        lines: entry.lines.length,
+        hasTimes: !!entry.times,
+        first3: entry.lines.slice(0, 3),
+        units: entry.seg.units.length,
+        unitsTranslated: entry.seg.units.filter((u) => bucket?.has(u)).length
+      } : null,
+      bucketSize: bucket?.size || 0,
+      trackerStates: states,
+      caption: captionText ? {
+        exactMatchPositions: positions,
+        unitsAtFirstMatch: positions ? entry.seg.cueUnits[positions[0]].map(unitInfo) : [],
+        bucketHasCaptionTextItself: !!bucket?.has(captionText),
+        scriptLinesStartingSimilarly: entry && head ? entry.lines.map((l, i) => [i, l]).filter(([, l]) => l.includes(head)).slice(0, 5) : []
+      } : null
     };
-    let found = [];
-    const whole = nearest((u) => u.includes(text));
-    if (whole !== -1) found = [whole];
-    else {
-      const words = text.split(" ");
-      if (words.length >= 4) {
-        const head = nearest((u) => u.includes(words.slice(0, Math.ceil(words.length / 2)).join(" ")));
-        const tail = nearest((u) => u.includes(words.slice(Math.floor(words.length / 2)).join(" ")));
-        found = [...new Set([head, tail].filter((k) => k !== -1))].sort((a, b) => a - b);
-      }
-    }
-    if (found.length > 0) lastCaptionIndex = unitCues[found[0]][0];
-    else if (!unmatchedLogged.has(text)) {
-      unmatchedLogged.add(text);
-      console.warn(`[UdemyTranslator] caption text not found in transcript: "${text.slice(0, 80)}"`);
-    }
-    return found;
   }
   function getVttTranslation(text, key = currentLectureKey(), { panel = false, index } = {}) {
     const bucket = buckets.get(key);
     if (!bucket) return null;
     const entry = scriptEntry(key);
     const i = index ?? (entry && (panel ? entry.positions.get(text)?.[0] : resolveCaptionIndex(entry, text)));
-    let us = i === void 0 ? [] : entry.seg.cueUnits[i];
-    if (us.length === 0 && entry && !panel && index === void 0) us = matchUnitsByText(entry, text);
+    const us = i === void 0 ? [] : entry.seg.cueUnits[i];
     if (us.length === 0) return bucket.get(text) || null;
     const parts = [];
     for (const u of us) {
@@ -936,6 +943,24 @@
   }
   var appliedText = /* @__PURE__ */ new WeakMap();
   var normalize = (s) => s.replace(/\s+/g, " ").trim();
+  var lookupLog = [];
+  function logLookup(entry) {
+    lookupLog.push({ at: (/* @__PURE__ */ new Date()).toISOString().slice(11, 23), ...entry });
+    if (lookupLog.length > 20) lookupLog.shift();
+  }
+  function getCaptionDebug() {
+    const liveEl = document.querySelector(CAPTION_SELECTOR);
+    return {
+      observedElementIsLive: !!currentCaptionEl && currentCaptionEl === liveEl,
+      observedElementConnected: !!currentCaptionEl?.isConnected,
+      liveElementHtml: liveEl ? liveEl.outerHTML.slice(0, 400) : null,
+      applied: liveEl ? appliedText.get(liveEl) || null : null,
+      recentLookups: [...lookupLog]
+    };
+  }
+  function getCaptionCacheEntry(text) {
+    return translationMapCache.has(text) ? translationMapCache.get(text) : null;
+  }
   function ownTextNodes(captionEl) {
     const nodes = [];
     const walker = document.createTreeWalker(captionEl, NodeFilter.SHOW_TEXT, {
@@ -983,7 +1008,9 @@
       restore();
       return;
     }
-    const translated = getVttTranslation(originalText) || translationMapCache.get(originalText);
+    const fromTranscript = getVttTranslation(originalText);
+    const translated = fromTranscript || translationMapCache.get(originalText);
+    logLookup({ text: originalText.slice(0, 120), via: fromTranscript ? "transcript" : translated ? "panelCache" : null });
     if (!translated) {
       restore();
       if (isAlreadyTargetLanguage(originalText, getActiveLang())) hideBadge();
@@ -1855,6 +1882,36 @@
     else if (failedCount === 0 || okCount > 0) setBadgeError(null);
   });
   onProgress(setBadgeProgress);
+  window.addEventListener("message", (event) => {
+    if (event.source !== window || event.data?.type !== "UDEMY_TRANSLATOR_DIAG") return;
+    const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
+    const captionDebug = getCaptionDebug();
+    const capEl = document.querySelector(CAPTION_SELECTOR);
+    const shown = capEl ? norm([...capEl.childNodes].filter((n) => !n.classList?.contains("caption-original")).map((n) => n.textContent).join("")) : "";
+    const captionText = captionDebug.applied && norm(captionDebug.applied.translated) === shown ? captionDebug.applied.original : shown;
+    const panel = document.querySelector(SELECTORS.panel);
+    const activeSpan = panel?.querySelector(`p[data-purpose="transcript-cue-active"] ${SELECTORS.cueText}`);
+    const activeRowText = activeSpan ? norm(activeSpan.dataset.original || activeSpan.textContent) : null;
+    const video = document.querySelector("video");
+    const report = {
+      version: chrome.runtime.getManifest().version,
+      path: location.pathname,
+      displayMode: currentStyle.displayMode,
+      videoTime: video ? Number(video.currentTime.toFixed(2)) : null,
+      captionShownText: shown,
+      captionOriginalText: captionText,
+      panel: panel ? {
+        rows: panel.querySelectorAll(SELECTORS.cueAll).length,
+        activeRowText,
+        activeRowEqualsCaption: activeRowText === captionText
+      } : null,
+      panelCacheForCaption: getCaptionCacheEntry(captionText),
+      captionElement: captionDebug,
+      ...getDiagnostics(captionText)
+    };
+    console.log(`[UdemyTranslator:DIAG]
+${JSON.stringify(report, null, 2)}`);
+  });
   setupNavigationHandler();
   console.log("[UdemyTranslator] content script loaded");
   initVttBridge();

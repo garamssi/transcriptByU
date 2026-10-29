@@ -1,12 +1,12 @@
-import { SELECTORS, STYLE_CHANGE_KEYS, STORAGE_KEYS } from './src/domain/constants.js';
-import { loadStyle, updateDynamicStyles } from './src/presentation/content/style-manager.js';
+import { SELECTORS, STYLE_CHANGE_KEYS, STORAGE_KEYS, CAPTION_SELECTOR } from './src/domain/constants.js';
+import { loadStyle, updateDynamicStyles, currentStyle } from './src/presentation/content/style-manager.js';
 import {
   initPanelFinder, scheduleTranslation, removeAllTranslations,
   applyDisplayModeAll, retranslateAll, getLectureContext,
 } from './src/presentation/content/transcript-manager.js';
-import { initCaptionFinder, refreshCaption } from './src/presentation/content/caption-manager.js';
+import { initCaptionFinder, refreshCaption, getCaptionDebug, getCaptionCacheEntry } from './src/presentation/content/caption-manager.js';
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
-import { initVttBridge, setActiveLang, onRequestStatus, resetFailures, currentLectureKey, onProgress } from './src/presentation/content/vtt-bridge.js';
+import { initVttBridge, setActiveLang, onRequestStatus, resetFailures, currentLectureKey, onProgress, getDiagnostics } from './src/presentation/content/vtt-bridge.js';
 import { setBadgeEnabled, setBadgeLang, setBadgeError, setBadgeProgress } from './src/presentation/content/badge-manager.js';
 import { resolveCode } from './src/domain/languages.js';
 import en from './locales/en.json';
@@ -82,6 +82,41 @@ onRequestStatus(({ key, error, failedCount, okCount }) => {
 
 // === 강의 번역 진행률 → 배지 (번역 중 N% / 완료 / 일부 실패) ===
 onProgress(setBadgeProgress);
+
+// === 진단: 페이지 콘솔에서 window.postMessage({ type: 'UDEMY_TRANSLATOR_DIAG' }, '*') ===
+// 영상 자막이 원문으로 남는 등 실제 화면에서만 재현되는 문제의 원인을 데이터로 확인하기 위한 덤프.
+// 자막·대본 원문과 상태만 출력하고, 키·토큰 같은 설정 값은 담지 않는다.
+window.addEventListener('message', (event) => {
+  if (event.source !== window || event.data?.type !== 'UDEMY_TRANSLATOR_DIAG') return;
+  const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+  const captionDebug = getCaptionDebug();
+  const capEl = document.querySelector(CAPTION_SELECTOR);
+  // 화면 자막이 이미 번역문이면 원문은 우리가 기록해 둔 값
+  const shown = capEl ? norm([...capEl.childNodes].filter(n => !n.classList?.contains('caption-original')).map(n => n.textContent).join('')) : '';
+  const captionText = captionDebug.applied && norm(captionDebug.applied.translated) === shown ? captionDebug.applied.original : shown;
+  const panel = document.querySelector(SELECTORS.panel);
+  const activeSpan = panel?.querySelector(`p[data-purpose="transcript-cue-active"] ${SELECTORS.cueText}`);
+  const activeRowText = activeSpan ? norm(activeSpan.dataset.original || activeSpan.textContent) : null;
+  const video = document.querySelector('video');
+  const report = {
+    version: chrome.runtime.getManifest().version,
+    path: location.pathname,
+    displayMode: currentStyle.displayMode,
+    videoTime: video ? Number(video.currentTime.toFixed(2)) : null,
+    captionShownText: shown,
+    captionOriginalText: captionText,
+    panel: panel ? {
+      rows: panel.querySelectorAll(SELECTORS.cueAll).length,
+      activeRowText,
+      activeRowEqualsCaption: activeRowText === captionText,
+    } : null,
+    panelCacheForCaption: getCaptionCacheEntry(captionText),
+    captionElement: captionDebug,
+    ...getDiagnostics(captionText),
+  };
+  console.log(`[UdemyTranslator:DIAG]
+${JSON.stringify(report, null, 2)}`);
+});
 
 // === SPA 네비게이션 대응 ===
 setupNavigationHandler();
