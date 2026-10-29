@@ -106,7 +106,7 @@
     "lines": "{count}行",
     "failedLines": "{failed}/{lines}行失敗",
     "took": "{sec}秒かかりました",
-    "repeated": "{count}回 繰り返し",
+    "repeated": "{count}回繰り返し",
     "waited": "{sec}秒待機",
     "retryAfter": "{sec}秒後に再試行推奨",
     "noLecture": "(レクチャー情報なし)",

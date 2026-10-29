@@ -29,7 +29,8 @@ export function appendErrorLog(entry) {
     const stored = await chrome.storage.local.get(ERROR_LOG_KEY);
     const list = Array.isArray(stored[ERROR_LOG_KEY]) ? stored[ERROR_LOG_KEY] : [];
     const sig = signature(record);
-    const dup = list.findIndex(e => signature(e) === sig && record.ts - e.ts < MERGE_WINDOW_MS);
+    // 첫 발생부터 10분까지만 합친다(반복 시각 기준이면 몇 분마다 나는 오류가 몇 시간이고 한 카드로 묶인다).
+    const dup = list.findIndex(e => signature(e) === sig && record.ts - (e.firstTs || e.ts) < MERGE_WINDOW_MS);
     if (dup !== -1) {
       const prev = list.splice(dup, 1)[0];
       // id 를 유지해 화면이 같은 카드를 갱신하게 한다(새 카드로 다시 그리지 않음).

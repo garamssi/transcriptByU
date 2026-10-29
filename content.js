@@ -1657,7 +1657,7 @@
       lines: "{count}\u884C",
       failedLines: "{failed}/{lines}\u884C\u5931\u6557",
       took: "{sec}\u79D2\u304B\u304B\u308A\u307E\u3057\u305F",
-      repeated: "{count}\u56DE \u7E70\u308A\u8FD4\u3057",
+      repeated: "{count}\u56DE\u7E70\u308A\u8FD4\u3057",
       waited: "{sec}\u79D2\u5F85\u6A5F",
       retryAfter: "{sec}\u79D2\u5F8C\u306B\u518D\u8A66\u884C\u63A8\u5968",
       noLecture: "(\u30EC\u30AF\u30C1\u30E3\u30FC\u60C5\u5831\u306A\u3057)",

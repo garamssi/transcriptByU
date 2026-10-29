@@ -77,6 +77,9 @@ export function initErrorLogDialog({
 }) {
   let entries = [];
   let seenAt = 0;
+  // 비동기 조회가 겹쳐 늦게 끝난 옛 결과가 새 결과를 덮어쓰지 않게 한다(초기화 중 refreshBadge 호출보다 먼저 선언).
+  let badgeSeq = 0;
+  let loadSeq = 0;
   let isOpen = false;
 
   refreshBadge();
@@ -90,17 +93,35 @@ export function initErrorLogDialog({
   });
 
   async function refreshBadge() {
+    const seq = ++badgeSeq;
     const log = await getErrorLog();
+    if (seq !== badgeSeq) return; // 늦게 끝난 옛 조회가 최신 배지를 덮지 않게
     const unread = log.entries.filter(e => e.ts > log.seenAt && kindOf(e) === 'error').length;
     badge.textContent = unread > 0 ? String(unread) : '';
     openBtn.classList.toggle('has-errors', unread > 0);
   }
 
   // 열린 상태에서 로그가 연달아 쓰이면(청크마다 한 건) 짧게 모아 한 번만 다시 그린다.
+  // 쓰기가 끊이지 않아도 최대 LOAD_MAX_WAIT_MS 안에는 한 번 그린다.
+  const LOAD_DEBOUNCE_MS = 150;
+  const LOAD_MAX_WAIT_MS = 600;
   let loadTimer = null;
+  let firstPendingAt = 0;
   function scheduleLoad() {
+    const now = Date.now();
+    if (!loadTimer) firstPendingAt = now;
     clearTimeout(loadTimer);
-    loadTimer = setTimeout(() => load(false), 150);
+    const delay = Math.min(LOAD_DEBOUNCE_MS, Math.max(0, firstPendingAt + LOAD_MAX_WAIT_MS - now));
+    loadTimer = setTimeout(() => {
+      loadTimer = null;
+      load(false);
+    }, delay);
+  }
+
+  function cancelPendingLoads() {
+    clearTimeout(loadTimer);
+    loadTimer = null;
+    loadSeq++; // 진행 중인 로드 결과는 버린다
   }
 
   let timeTimer = null;
@@ -120,14 +141,12 @@ export function initErrorLogDialog({
   function close() {
     isOpen = false;
     overlay.classList.remove('open');
-    clearTimeout(loadTimer);
+    cancelPendingLoads();
     clearInterval(timeTimer);
-    // 다음에 열 때 '새 항목' 표시 기준을 지금으로 맞춘다.
-    seenAt = Date.now();
+    // 열어 둔 사이에 들어온 로그도 본 것으로 기록한다(닫은 뒤 배지·'새 항목'으로 다시 뜨지 않게).
+    markErrorLogSeen().catch(() => {});
   }
 
-  // 비동기 로드가 겹쳐 늦게 끝난 옛 결과가 새 결과를 덮어쓰지 않게 한다.
-  let loadSeq = 0;
   async function load(initial) {
     const seq = ++loadSeq;
     const [log, blocks] = await Promise.all([getErrorLog(), getActiveBlocks()]);
@@ -176,17 +195,23 @@ export function initErrorLogDialog({
       setHtml(list, `<div class="cache-empty log-empty">${ICONS.ok}<span>${escapeHtml(t('log.empty'))}</span><small>${escapeHtml(t('log.emptySub'))}</small></div>`);
       return;
     }
-    // 빈 상태 화면이 떠 있었으면 걷어낸다(카드는 아래에서 개별로 붙인다).
-    if (lastHtml.get(list)) {
+    // 빈 상태 화면(또는 첫 렌더 전 HTML 의 공백·주석 노드)을 걷어낸다(카드는 아래에서 개별로 붙인다).
+    if (lastHtml.get(list) || cards.size === 0) {
       list.innerHTML = '';
       lastHtml.delete(list);
     }
 
     // 스크롤해서 보고 있던 카드가 새 카드 추가 뒤에도 같은 자리에 보이도록 기준 카드를 기억한다.
-    const anchor = list.scrollTop > 0
-      ? [...cards.values()].map(c => c.el).find(el => el.offsetTop + el.offsetHeight > list.scrollTop)
+    // 화면 순서대로 목록 기준 좌표로 찾고, 이번 갱신에서 맨 위로 옮겨질 카드(반복으로 합쳐진 카드)는 건너뛴다.
+    // 창을 새로 열 때는 항상 맨 위(최신)부터 보여 준다.
+    const listTop = () => list.getBoundingClientRect().top;
+    const unchanged = new Set(entries
+      .filter(e => cards.get(e.id)?.version === `${e.ts}|${e.count || 1}|${e.ts > seenAt}`)
+      .map(e => cards.get(e.id).el));
+    const anchor = !initial && list.scrollTop > 0
+      ? [...list.children].find(el => unchanged.has(el) && el.getBoundingClientRect().bottom > listTop())
       : null;
-    const anchorOffset = anchor ? anchor.offsetTop - list.scrollTop : 0;
+    const anchorOffset = anchor ? anchor.getBoundingClientRect().top - listTop() : 0;
 
     const alive = new Set(entries.map(e => e.id));
     for (const [id, c] of cards) {
@@ -217,8 +242,10 @@ export function initErrorLogDialog({
       prev = c.el;
     });
 
-    if (anchor && anchor.isConnected) list.scrollTop = anchor.offsetTop - anchorOffset;
-    else if (initial) list.scrollTop = 0;
+    if (initial) list.scrollTop = 0;
+    else if (anchor && anchor.isConnected) {
+      list.scrollTop += anchor.getBoundingClientRect().top - listTop() - anchorOffset;
+    }
   }
 
   /** 카드 내용을 채운다. 펼쳐 둔 '상세'는 갱신 후에도 펼친 상태를 유지한다. */
@@ -263,7 +290,7 @@ export function initErrorLogDialog({
         <div class="log-card-main">
           <div class="log-card-top">
             <span class="log-card-title">${isNew ? '<span class="log-new-dot"></span>' : ''}${escapeHtml(codeLabel(e.code))}</span>
-            <time class="log-card-time" data-ts="${e.ts}" title="${attr(absoluteTime(e.ts))}">${escapeHtml(relativeTime(e.ts))}</time>
+            <time class="log-card-time" data-ts="${e.ts}" title="${attr(e.count > 1 && e.firstTs ? `${absoluteTime(e.firstTs)} ~ ${absoluteTime(e.ts)}` : absoluteTime(e.ts))}">${escapeHtml(relativeTime(e.ts))}</time>
           </div>
           <div class="log-card-lecture" title="${attr(lecture)}">${escapeHtml(lecture)}</div>
           <div class="log-card-meta">${chips.join('')}</div>
@@ -293,6 +320,7 @@ export function initErrorLogDialog({
         e.waitMs && `wait=${e.waitMs}ms`,
         e.retryAfterMs && `retryAfter=${e.retryAfterMs}ms`,
         e.count > 1 && `repeated=${e.count}`,
+        e.count > 1 && e.firstTs && `first=${new Date(e.firstTs).toISOString()}`,
       ].filter(Boolean).join(' ');
       const lecture = [e.course, e.section, e.lecture].filter(Boolean).join(' › ');
       return [head, fields, lecture && `lecture: ${lecture}`, e.message && `message: ${e.message}`]
@@ -322,6 +350,7 @@ export function initErrorLogDialog({
   });
 
   clearBtn.addEventListener('click', async () => {
+    cancelPendingLoads(); // 지우기 전에 읽어 둔 옛 로그가 뒤늦게 다시 그려지지 않게
     await clearErrorLog();
     entries = [];
     render();

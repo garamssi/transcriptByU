@@ -28,3 +28,21 @@ test('강의가 다르면 합치지 않고, 최대 개수를 지킨다', async (
   assert.strictEqual(store[ERROR_LOG_KEY].length, ERROR_LOG_MAX);
   assert.strictEqual(store[ERROR_LOG_KEY][0].lecture, `l${ERROR_LOG_MAX + 2}`);
 });
+
+test('합치는 기준은 첫 발생 시각부터 10분이다(반복될 때마다 창이 늘어나지 않음)', async () => {
+  store[ERROR_LOG_KEY] = [];
+  const realNow = Date.now;
+  let now = 1_000_000;
+  Date.now = () => now;
+  try {
+    await appendErrorLog({ ...base, lecture: 'w' });
+    now += 6 * 60_000; await appendErrorLog({ ...base, lecture: 'w' }); // 6분: 합침
+    now += 6 * 60_000; await appendErrorLog({ ...base, lecture: 'w' }); // 첫 발생 12분: 새 항목
+  } finally {
+    Date.now = realNow;
+  }
+  const ws = store[ERROR_LOG_KEY].filter(e => e.lecture === 'w');
+  assert.strictEqual(ws.length, 2);
+  assert.strictEqual(ws[1].count, 2);
+  assert.strictEqual(ws[1].firstTs, 1_000_000);
+});
