@@ -10,6 +10,7 @@
     "proxyUrl": "Proxy server URL",
     "save": "Save",
     "saved": "Saved!",
+    "invalidKey": "Invalid characters in key — re-enter in English mode",
     "retranslate": "Re-translate",
     "retranslating": "Re-translating...",
     "retranslateDone": "{count} re-translated!",

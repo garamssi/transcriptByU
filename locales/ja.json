@@ -10,6 +10,7 @@
     "proxyUrl": "プロキシサーバーURL",
     "save": "保存",
     "saved": "保存しました！",
+    "invalidKey": "キーに無効な文字があります — 半角英数字で再入力",
     "retranslate": "再翻訳",
     "retranslating": "再翻訳中...",
     "retranslateDone": "{count}件を再翻訳しました！",

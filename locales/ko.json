@@ -10,6 +10,7 @@
     "proxyUrl": "프록시 서버 URL",
     "save": "저장",
     "saved": "저장 완료!",
+    "invalidKey": "키에 한글 등 잘못된 문자가 있어요 — 영문 입력으로 다시 입력",
     "retranslate": "재번역",
     "retranslating": "재번역 중...",
     "retranslateDone": "{count}건 재번역 완료!",
