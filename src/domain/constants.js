@@ -31,6 +31,8 @@ export const L1_MAX_SIZE = 50;
 
 // === Translation ===
 export const CHUNK_SIZE = 60;
+// 첫 청크만 작게 보내 첫 번역이 빨리 화면에 뜨게 한다 (나머지는 CHUNK_SIZE)
+export const FIRST_CHUNK_SIZE = 15;
 
 // === API 요청 제어 ===
 // 응답 대기 상한. 60줄 청크 + thinking 은 수십 초 걸릴 수 있어 넉넉히 둔다

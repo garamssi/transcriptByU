@@ -16,6 +16,10 @@ const processedUrls = new Set();
 // 자동 경로가 초기 로드 시 같은 강의를 동시에 요청해 API 를 이중 호출(paid provider
 // 비용 2배)하는 것을 막는다.
 const inFlight = new Set();
+// 진행 중인 배치 요청 → 그 요청의 강의 키. 청크별 부분 결과(TRANSLATE_PARTIAL)를
+// 요청한 강의 버킷에 바로 채우는 데 쓴다.
+const pendingRequests = new Map();
+let requestSeq = 0;
 
 // 현재 목표 언어 (캐시 키 구성용). content 스크립트 초기화/설정 변경 시 갱신.
 let currentLang = DEFAULT_TARGET_CODE;
@@ -111,6 +115,18 @@ export function initVttBridge() {
     }
   });
 
+  // 청크별 부분 결과: 강의 전체 번역이 끝나기 전에 먼저 도착한 청크를 바로 화면에 반영한다.
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type !== 'TRANSLATE_PARTIAL') return;
+    const key = pendingRequests.get(message.requestId);
+    if (!key) return;
+    const bucket = getOrCreateBucket(key);
+    for (const [text, translation] of Object.entries(message.translations || {})) {
+      if (translation) bucket.set(text, translation);
+    }
+    if (key === currentLectureKey()) document.dispatchEvent(new Event('vtt-translations-ready'));
+  });
+
   // 리스너 등록 완료 → 인터셉터에 '준비됨' 신호를 보내, 리스너 등록 전에
   // 캡처돼 버퍼에 쌓인 VTT 를 재전송받는다(최초 로드 레이스 방지).
   window.postMessage({ type: 'UDEMY_VTT_BRIDGE_READY' }, window.location.origin);
@@ -154,10 +170,14 @@ export async function requestTranslations(texts, { force = false } = {}) {
   const track = trackerFor(key);
   toSend.forEach(t => track.set(t, { attempts: track.get(t)?.attempts || 0, state: 'pending' }));
 
+  const requestId = `${Date.now().toString(36)}-${++requestSeq}`;
+  pendingRequests.set(requestId, key);
+
   let response;
   try {
     response = await chrome.runtime.sendMessage({
       type: 'TRANSLATE_BATCH',
+      requestId,
       texts: toSend,
       targetCode,
       course: ctx.course,
@@ -170,6 +190,7 @@ export async function requestTranslations(texts, { force = false } = {}) {
     response = { error: { code: 'DISCONNECTED', message: err?.message } };
   } finally {
     toSend.forEach(t => inFlight.delete(marker(t)));
+    pendingRequests.delete(requestId);
   }
 
   const error = response?.error || null;

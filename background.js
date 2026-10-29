@@ -69,7 +69,13 @@ const cacheService = new CacheService(l1Cache);
 // === 메시지 리스너 ===
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'TRANSLATE_BATCH') {
-    translationService.translateBatch(message).then(sendResponse);
+    // 청크가 끝날 때마다 요청한 탭(프레임)에 먼저 보내, 강의 전체 완료 전에도 자막이 바뀌게 한다.
+    const tabId = sender.tab?.id;
+    const onPartial = tabId != null && message.requestId
+      ? (translations) => chrome.tabs.sendMessage(tabId, { type: 'TRANSLATE_PARTIAL', requestId: message.requestId, translations },
+        { frameId: sender.frameId }).catch(() => {})
+      : undefined;
+    translationService.translateBatch(message, onPartial).then(sendResponse);
     return true;
   }
 

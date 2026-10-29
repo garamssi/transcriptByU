@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { TranslationService } from '../src/application/translation-service.js';
 import { LRUCache } from '../src/infrastructure/cache/lru-cache.js';
 import { ApiError, ERROR_CODES as C } from '../src/domain/api-error.js';
-import { CHUNK_SIZE } from '../src/domain/constants.js';
+import { CHUNK_SIZE, FIRST_CHUNK_SIZE } from '../src/domain/constants.js';
 
 // 입력 "N|원문" 줄을 "N|T:원문" 으로 번역하는 가짜 API
 function echoTranslate(userText) {
@@ -49,9 +49,9 @@ test('한 청크가 실패해도 앞서 성공한 청크는 결과·캐시에 �
   assert.strictEqual(res.error.code, C.RATE_LIMIT);
   assert.strictEqual(res.error.retryAfterMs, 60_000);
   const ok = res.results.filter(r => r.translation).length;
-  assert.strictEqual(ok, CHUNK_SIZE);
-  assert.ok(res.results.slice(CHUNK_SIZE).every(r => r.error === C.RATE_LIMIT));
-  assert.strictEqual(Object.keys(l2.get(L2_KEY)).length, CHUNK_SIZE);
+  assert.strictEqual(ok, FIRST_CHUNK_SIZE);
+  assert.ok(res.results.slice(FIRST_CHUNK_SIZE).every(r => r.error === C.RATE_LIMIT));
+  assert.strictEqual(Object.keys(l2.get(L2_KEY)).length, FIRST_CHUNK_SIZE);
   assert.strictEqual(logs.length, 1);
   assert.strictEqual(logs[0].code, C.RATE_LIMIT);
 });
@@ -76,10 +76,10 @@ test('MAX_TOKENS 청크는 반으로 나눠 다시 보낸다', async () => {
     if (n > 30) throw new ApiError(C.MAX_TOKENS);
     return echoTranslate(userText);
   });
-  const res = await service.translateBatch(req(lines(CHUNK_SIZE)));
+  const res = await service.translateBatch(req(lines(FIRST_CHUNK_SIZE + CHUNK_SIZE)));
   assert.ok(!res.error);
   assert.ok(res.results.every(r => r.translation));
-  assert.deepStrictEqual(sizes, [60, 30, 30]);
+  assert.deepStrictEqual(sizes, [FIRST_CHUNK_SIZE, CHUNK_SIZE, 30, 30]);
 });
 
 test('재번역(force)은 캐시를 건너뛰고, 실패한 줄은 기존 번역을 유지한다', async () => {
@@ -116,4 +116,19 @@ test('느린 요청은 재시도 정보와 함께 SLOW 경고로 기록된다', 
   assert.strictEqual(logs[0].code, 'SLOW');
   assert.strictEqual(logs[0].waitMs, 12_000);
   assert.strictEqual(logs[0].durationMs, 15_000);
+});
+
+test('첫 청크는 작게 보내고, 청크마다 부분 결과를 바로 알린다', async () => {
+  const sizes = [];
+  const { service } = makeService(async (_sp, userText) => {
+    sizes.push(userText.split('\n').length - 1);
+    return echoTranslate(userText);
+  });
+  const partials = [];
+  const texts = lines(FIRST_CHUNK_SIZE + CHUNK_SIZE + 5);
+  const res = await service.translateBatch(req(texts), (entries) => partials.push(entries));
+  assert.ok(!res.error);
+  assert.deepStrictEqual(sizes, [FIRST_CHUNK_SIZE, CHUNK_SIZE, 5]);
+  assert.deepStrictEqual(partials.map(p => Object.keys(p).length), [FIRST_CHUNK_SIZE, CHUNK_SIZE, 5]);
+  assert.strictEqual(partials[0][texts[0]], `T:${texts[0]}`);
 });

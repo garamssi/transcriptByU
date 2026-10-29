@@ -1,4 +1,4 @@
-import { CHUNK_SIZE, SLOW_REQUEST_MS } from '../domain/constants.js';
+import { CHUNK_SIZE, FIRST_CHUNK_SIZE, SLOW_REQUEST_MS } from '../domain/constants.js';
 import { DEFAULT_TARGET_CODE } from '../domain/languages.js';
 import { buildBatchSystemPrompt } from '../domain/prompt-builder.js';
 import { parseBatchResponse } from '../domain/response-parser.js';
@@ -39,11 +39,13 @@ export class TranslationService {
    * 배치 번역 (캐시 조회 → 미번역분 API 호출 → 청크별 캐시 저장)
    * @param {object} req
    * @param {boolean} [req.force] - 캐시를 건너뛰고 새로 번역한다(재번역). 실패한 줄은 기존 번역을 유지한다.
+   * @param {(entries: Record<string,string>) => void} [onPartial] - 청크가 끝날 때마다 그 번역을 바로 알린다
+   *   (전체 완료를 기다리지 않고 화면에 먼저 반영하기 위함)
    * @returns {Promise<{ results?: Array, error?: { code: string, retryAfterMs?: number, message?: string } }>}
    *   results[i] = { translation, cached } | { skipped: true } | { error: code }
    *   error = 일부/전체 실패 시 대표 오류 (재시도·표시 판단용)
    */
-  async translateBatch({ texts, targetCode, sourceCode, course, lecture, section, force = false }) {
+  async translateBatch({ texts, targetCode, sourceCode, course, lecture, section, force = false }, onPartial) {
     try {
       const { enabled } = await this.getSettings();
       if (enabled === false) return { error: { code: 'DISABLED' } };
@@ -106,6 +108,7 @@ export class TranslationService {
         // L1 에서 빠졌으면(번역 중 팝업에서 캐시 삭제 등) 처음 로드한 맵 대신 L2 현재값을 기준으로 삼아
         // 삭제된 캐시를 되살리지 않는다. await 뒤에 L1 을 다시 확인하므로 병합의 원자성은 유지된다.
         persist: async (entries) => {
+          try { onPartial?.(entries); } catch (_) { /* 알림 실패는 번역에 영향 주지 않음 */ }
           try {
             let latest = this.l1Cache.get(lKey);
             if (!latest) {
@@ -155,7 +158,7 @@ export class TranslationService {
   }
 
   /**
-   * CHUNK_SIZE 단위로 청크를 나눠 번역한다.
+   * 첫 청크는 FIRST_CHUNK_SIZE, 이후 CHUNK_SIZE 단위로 나눠 번역한다.
    * - 청크마다 오류를 따로 처리하고, 성공한 청크는 바로 persist 한다.
    * - 남은 청크도 같은 결과가 나올 오류(일일 한도·키 오류·긴 쿨다운)면 즉시 중단한다.
    * - claude-code 는 로컬 프록시가 큐잉하므로 병렬, 클라우드는 스케줄러가 간격을 조절하므로 순차.
@@ -168,8 +171,8 @@ export class TranslationService {
     let firstError = null;
     let stopped = false;
 
-    const chunks = [];
-    for (let start = 0; start < uniqueTexts.length; start += CHUNK_SIZE) {
+    const chunks = [uniqueTexts.slice(0, FIRST_CHUNK_SIZE)];
+    for (let start = FIRST_CHUNK_SIZE; start < uniqueTexts.length; start += CHUNK_SIZE) {
       chunks.push(uniqueTexts.slice(start, start + CHUNK_SIZE));
     }
 

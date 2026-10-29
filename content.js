@@ -299,6 +299,8 @@
   var buckets = new LRUCache();
   var processedUrls = /* @__PURE__ */ new Set();
   var inFlight = /* @__PURE__ */ new Set();
+  var pendingRequests = /* @__PURE__ */ new Map();
+  var requestSeq = 0;
   var currentLang = DEFAULT_TARGET_CODE;
   function setActiveLang(lang2) {
     if (lang2) currentLang = lang2;
@@ -350,6 +352,16 @@
         console.error(`[UdemyTranslator:VTT] error: ${err.message}`);
       }
     });
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message?.type !== "TRANSLATE_PARTIAL") return;
+      const key = pendingRequests.get(message.requestId);
+      if (!key) return;
+      const bucket = getOrCreateBucket(key);
+      for (const [text, translation] of Object.entries(message.translations || {})) {
+        if (translation) bucket.set(text, translation);
+      }
+      if (key === currentLectureKey()) document.dispatchEvent(new Event("vtt-translations-ready"));
+    });
     window.postMessage({ type: "UDEMY_VTT_BRIDGE_READY" }, window.location.origin);
   }
   async function requestTranslations(texts, { force = false } = {}) {
@@ -367,10 +379,13 @@
     toSend.forEach((t2) => inFlight.add(marker(t2)));
     const track = trackerFor(key);
     toSend.forEach((t2) => track.set(t2, { attempts: track.get(t2)?.attempts || 0, state: "pending" }));
+    const requestId = `${Date.now().toString(36)}-${++requestSeq}`;
+    pendingRequests.set(requestId, key);
     let response;
     try {
       response = await chrome.runtime.sendMessage({
         type: "TRANSLATE_BATCH",
+        requestId,
         texts: toSend,
         targetCode,
         course: ctx.course,
@@ -382,6 +397,7 @@
       response = { error: { code: "DISCONNECTED", message: err?.message } };
     } finally {
       toSend.forEach((t2) => inFlight.delete(marker(t2)));
+      pendingRequests.delete(requestId);
     }
     const error = response?.error || null;
     const results = response?.results || [];
