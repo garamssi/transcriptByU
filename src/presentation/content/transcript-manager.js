@@ -135,8 +135,9 @@ export function applyTranslation(textSpan, container, translation, captionText =
   }
   textSpan.dataset.translated = translation;
 
-  // 캡션 번역 캐시 업데이트 (DOM 스캔 방지) — 영상 자막은 패널과 달리 문장 전체를 보여 준다
-  updateCaptionCache(textSpan.dataset.original, captionText);
+  // 캡션 번역 캐시 업데이트 (DOM 스캔 방지) — 영상 자막은 패널과 달리 문장 전체를 보여 준다.
+  // 키는 영상 자막 조회와 같은 공백 정규화로(그대로 두면 줄바꿈·연속 공백이 든 큐가 매칭되지 않는다).
+  updateCaptionCache(textSpan.dataset.original.replace(/\s+/g, ' ').trim(), captionText);
 
   if (currentStyle.displayMode !== 'original') {
     textSpan.textContent = translation;

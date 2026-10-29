@@ -73,6 +73,9 @@
   },
   "badge": {
     "translatingTo": "Translating to {lang}",
+    "translatingProgress": "Translating to {lang} {percent}%",
+    "done": "✓ {lang} translation complete",
+    "partial": "{lang} done · {failed} sentences failed",
     "error": {
       "RATE_LIMIT": "Rate limited · retrying soon",
       "QUOTA_DAILY": "Daily limit reached",

@@ -53,6 +53,42 @@ export function setLectureScript(lines, source, times) {
     seg: buildSentenceUnits(deduped),
     times: times ? times.filter((_, i) => keep[i]) : null,
   });
+  emitProgress();
+}
+
+// === 강의 번역 진행률 (배지 표시용) ===
+const progressListeners = new Set();
+
+/** @param {(p: { total: number, done: number, failed: number, gaveUp: number } | null) => void} listener */
+export function onProgress(listener) {
+  progressListeners.add(listener);
+}
+
+/**
+ * 현재 강의의 번역 진행률. 대본(문장 단위)을 모르면 null.
+ * done: 번역됐거나 이미 목표 언어라 건너뛴 단위, failed: 자동 재시도 대기, gaveUp: 재시도 포기
+ */
+export function getProgress(key = currentLectureKey()) {
+  const entry = scriptEntry(key);
+  if (!entry) return null;
+  const bucket = buckets.get(key);
+  const track = tracker.get(key);
+  const units = new Set(entry.seg.units);
+  let done = 0, failed = 0, gaveUp = 0;
+  for (const u of units) {
+    const state = track?.get(u)?.state;
+    if (bucket?.has(u) || state === 'done') done++;
+    else if (state === 'failed') failed++;
+    else if (state === 'gaveUp') gaveUp++;
+  }
+  return { total: units.size, done, failed, gaveUp };
+}
+
+function emitProgress() {
+  const p = getProgress();
+  for (const l of progressListeners) {
+    try { l(p); } catch (_) { /* noop */ }
+  }
 }
 
 const scriptEntry = key => lectureScripts.get(key.slice(key.indexOf('::') + 2));
@@ -250,7 +286,10 @@ export function initVttBridge() {
     for (const [text, translation] of Object.entries(message.translations || {})) {
       if (translation) bucket.set(text, translation);
     }
-    if (key === currentLectureKey()) document.dispatchEvent(new Event('vtt-translations-ready'));
+    if (key === currentLectureKey()) {
+      document.dispatchEvent(new Event('vtt-translations-ready'));
+      emitProgress();
+    }
   });
 
   // 리스너 등록 완료 → 인터셉터에 '준비됨' 신호를 보내, 리스너 등록 전에
@@ -393,6 +432,7 @@ export async function requestTranslations(texts, { force = false } = {}) {
 
   scheduleRetry();
   emitStatus({ key, error, failedCount: failedTexts.length, okCount: freshCount + cachedCount });
+  if (key === currentLectureKey()) emitProgress();
   return { count: freshCount + cachedCount, fresh: freshCount, failedTexts, error: resultError };
 }
 
@@ -503,6 +543,42 @@ async function retryDue() {
 }
 
 /**
+ * 대본 줄과 정확히 일치하지 않는 영상 자막 텍스트가 속한 문장 단위들.
+ * 1) 텍스트를 통째로 품은 문장, 2) 없으면 텍스트 앞·뒤 절반을 각각 품은 문장(두 문장에 걸친 자막).
+ * 같은 텍스트가 여러 문장에 있으면 직전에 보여 준 위치와 가장 가까운 문장을 고른다.
+ * @returns {number[]} 단위 인덱스(순서대로), 못 찾으면 []
+ */
+const unmatchedLogged = new Set();
+function matchUnitsByText(entry, text) {
+  const { units, unitCues } = entry.seg;
+  const nearest = (pred) => {
+    let best = -1;
+    units.forEach((u, k) => {
+      if (!pred(u)) return;
+      if (best === -1 || Math.abs(unitCues[k][0] - lastCaptionIndex) < Math.abs(unitCues[best][0] - lastCaptionIndex)) best = k;
+    });
+    return best;
+  };
+  let found = [];
+  const whole = nearest(u => u.includes(text));
+  if (whole !== -1) found = [whole];
+  else {
+    const words = text.split(' ');
+    if (words.length >= 4) {
+      const head = nearest(u => u.includes(words.slice(0, Math.ceil(words.length / 2)).join(' ')));
+      const tail = nearest(u => u.includes(words.slice(Math.floor(words.length / 2)).join(' ')));
+      found = [...new Set([head, tail].filter(k => k !== -1))].sort((a, b) => a - b);
+    }
+  }
+  if (found.length > 0) lastCaptionIndex = unitCues[found[0]][0];
+  else if (!unmatchedLogged.has(text)) {
+    unmatchedLogged.add(text);
+    console.warn(`[UdemyTranslator] caption text not found in transcript: "${text.slice(0, 80)}"`);
+  }
+  return found;
+}
+
+/**
  * 큐가 화면에 보일 때 표시할 번역을 조회한다.
  * 영상 자막: 큐가 속한 문장(들)의 번역 전체 — 큐가 바뀌는 시점(영상 시간)은 Udemy 가 정하고,
  * 문장이 시작되는 큐부터 그 문장이 끝나는 큐까지 같은 번역이 유지된다.
@@ -518,7 +594,9 @@ export function getVttTranslation(text, key = currentLectureKey(), { panel = fal
   if (!bucket) return null;
   const entry = scriptEntry(key);
   const i = index ?? (entry && (panel ? entry.positions.get(text)?.[0] : resolveCaptionIndex(entry, text)));
-  const us = i === undefined ? [] : entry.seg.cueUnits[i];
+  let us = i === undefined ? [] : entry.seg.cueUnits[i];
+  // 영상 자막 텍스트가 대본 줄과 똑같지 않으면(패널·VTT 와 줄 나눔이 다른 경우) 그 텍스트를 품은 문장을 찾는다.
+  if (us.length === 0 && entry && !panel && index === undefined) us = matchUnitsByText(entry, text);
   if (us.length === 0) return bucket.get(text) || null; // 대본에 없는 큐: 큐 자체가 단위
   const parts = [];
   for (const u of us) {
@@ -540,4 +618,5 @@ export function clearVttStore() {
   clearTimeout(retryTimer);
   retryTimer = null;
   lastCaptionIndex = 0;
+  emitProgress(); // 새 강의: 대본을 다시 잡기 전까지 진행률 없음(null)
 }

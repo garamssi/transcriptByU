@@ -6,8 +6,8 @@ import {
 } from './src/presentation/content/transcript-manager.js';
 import { initCaptionFinder, refreshCaption } from './src/presentation/content/caption-manager.js';
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
-import { initVttBridge, setActiveLang, onRequestStatus, resetFailures, currentLectureKey } from './src/presentation/content/vtt-bridge.js';
-import { setBadgeEnabled, setBadgeLang, setBadgeError } from './src/presentation/content/badge-manager.js';
+import { initVttBridge, setActiveLang, onRequestStatus, resetFailures, currentLectureKey, onProgress } from './src/presentation/content/vtt-bridge.js';
+import { setBadgeEnabled, setBadgeLang, setBadgeError, setBadgeProgress } from './src/presentation/content/badge-manager.js';
 import { resolveCode } from './src/domain/languages.js';
 import en from './locales/en.json';
 import ko from './locales/ko.json';
@@ -79,6 +79,9 @@ onRequestStatus(({ key, error, failedCount, okCount }) => {
   if (error && error.code !== 'PARSE_ERROR' && error.code !== 'DISABLED') setBadgeError(error.code);
   else if (failedCount === 0 || okCount > 0) setBadgeError(null);
 });
+
+// === 강의 번역 진행률 → 배지 (번역 중 N% / 완료 / 일부 실패) ===
+onProgress(setBadgeProgress);
 
 // === SPA 네비게이션 대응 ===
 setupNavigationHandler();

@@ -100,6 +100,15 @@ export class TranslationService {
 
       if (uncachedIndices.length === 0) return { results };
 
+      // 캐시에 있던 번역은 API 결과를 기다리지 않고 바로 알린다(화면·진행률에 즉시 반영).
+      if (onPartial) {
+        const cachedEntries = {};
+        texts.forEach((t, i) => { if (results[i]?.cached) cachedEntries[t] = results[i].translation; });
+        if (Object.keys(cachedEntries).length > 0) {
+          try { onPartial(cachedEntries); } catch (_) { /* 알림 실패는 번역에 영향 주지 않음 */ }
+        }
+      }
+
       // 3) 미번역분: 중복 제거 후 청크 단위 API 호출. 성공한 청크는 즉시 캐시에 병합 저장한다.
       //    다른 요청이 이미 번역 중인 문장은 보내지 않고 그 결과를 기다린다(재번역 제외).
       const uniqueTexts = [...new Set(uncachedIndices.map(i => texts[i]))];

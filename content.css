@@ -52,3 +52,23 @@
   box-shadow: 0 0 8px #fb7185;
   animation: none;
 }
+/* 강의 전체 번역 완료: 초록 점 고정(깜빡임 없음) */
+.udemy-translator-badge.utb-done {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(52, 211, 153, 0.55);
+}
+.udemy-translator-badge.utb-done .utb-dot {
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: none;
+}
+/* 일부 문장 실패로 끝남: 주황 점 고정 */
+.udemy-translator-badge.utb-partial {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: rgba(251, 191, 36, 0.55);
+}
+.udemy-translator-badge.utb-partial .utb-dot {
+  background: #fbbf24;
+  box-shadow: 0 0 8px #fbbf24;
+  animation: none;
+}

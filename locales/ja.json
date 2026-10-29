@@ -73,6 +73,9 @@
   },
   "badge": {
     "translatingTo": "{lang}に翻訳中",
+    "translatingProgress": "{lang}に翻訳中 {percent}%",
+    "done": "✓ {lang}の翻訳完了",
+    "partial": "{lang}の翻訳完了 · {failed}文失敗",
     "error": {
       "RATE_LIMIT": "リクエスト制限 · まもなく再試行",
       "QUOTA_DAILY": "1日の上限に到達",

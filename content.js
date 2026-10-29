@@ -407,6 +407,35 @@
       seg: buildSentenceUnits(deduped),
       times: times ? times.filter((_, i) => keep[i]) : null
     });
+    emitProgress();
+  }
+  var progressListeners = /* @__PURE__ */ new Set();
+  function onProgress(listener) {
+    progressListeners.add(listener);
+  }
+  function getProgress(key = currentLectureKey()) {
+    const entry = scriptEntry(key);
+    if (!entry) return null;
+    const bucket = buckets.get(key);
+    const track = tracker.get(key);
+    const units = new Set(entry.seg.units);
+    let done = 0, failed = 0, gaveUp = 0;
+    for (const u of units) {
+      const state = track?.get(u)?.state;
+      if (bucket?.has(u) || state === "done") done++;
+      else if (state === "failed") failed++;
+      else if (state === "gaveUp") gaveUp++;
+    }
+    return { total: units.size, done, failed, gaveUp };
+  }
+  function emitProgress() {
+    const p = getProgress();
+    for (const l of progressListeners) {
+      try {
+        l(p);
+      } catch (_) {
+      }
+    }
   }
   var scriptEntry = (key) => lectureScripts.get(key.slice(key.indexOf("::") + 2));
   function resolveCueIndices(cueTexts, key = currentLectureKey()) {
@@ -528,7 +557,10 @@
       for (const [text, translation] of Object.entries(message.translations || {})) {
         if (translation) bucket.set(text, translation);
       }
-      if (key === currentLectureKey()) document.dispatchEvent(new Event("vtt-translations-ready"));
+      if (key === currentLectureKey()) {
+        document.dispatchEvent(new Event("vtt-translations-ready"));
+        emitProgress();
+      }
     });
     window.postMessage({ type: "UDEMY_VTT_BRIDGE_READY" }, window.location.origin);
   }
@@ -630,6 +662,7 @@
     console.log(`[UdemyTranslator:VTT] ${freshCount + cachedCount}/${toSend.length} translations stored (cache hit: ${cachedCount}, fresh: ${freshCount}, failed: ${failedTexts.length})`);
     scheduleRetry();
     emitStatus({ key, error, failedCount: failedTexts.length, okCount: freshCount + cachedCount });
+    if (key === currentLectureKey()) emitProgress();
     return { count: freshCount + cachedCount, fresh: freshCount, failedTexts, error: resultError };
   }
   var tracker = /* @__PURE__ */ new Map();
@@ -713,12 +746,42 @@
       console.error(`[UdemyTranslator:VTT] auto-retry error: ${err?.message || err}`);
     }
   }
+  var unmatchedLogged = /* @__PURE__ */ new Set();
+  function matchUnitsByText(entry, text) {
+    const { units, unitCues } = entry.seg;
+    const nearest = (pred) => {
+      let best = -1;
+      units.forEach((u, k) => {
+        if (!pred(u)) return;
+        if (best === -1 || Math.abs(unitCues[k][0] - lastCaptionIndex) < Math.abs(unitCues[best][0] - lastCaptionIndex)) best = k;
+      });
+      return best;
+    };
+    let found = [];
+    const whole = nearest((u) => u.includes(text));
+    if (whole !== -1) found = [whole];
+    else {
+      const words = text.split(" ");
+      if (words.length >= 4) {
+        const head = nearest((u) => u.includes(words.slice(0, Math.ceil(words.length / 2)).join(" ")));
+        const tail = nearest((u) => u.includes(words.slice(Math.floor(words.length / 2)).join(" ")));
+        found = [...new Set([head, tail].filter((k) => k !== -1))].sort((a, b) => a - b);
+      }
+    }
+    if (found.length > 0) lastCaptionIndex = unitCues[found[0]][0];
+    else if (!unmatchedLogged.has(text)) {
+      unmatchedLogged.add(text);
+      console.warn(`[UdemyTranslator] caption text not found in transcript: "${text.slice(0, 80)}"`);
+    }
+    return found;
+  }
   function getVttTranslation(text, key = currentLectureKey(), { panel = false, index } = {}) {
     const bucket = buckets.get(key);
     if (!bucket) return null;
     const entry = scriptEntry(key);
     const i = index ?? (entry && (panel ? entry.positions.get(text)?.[0] : resolveCaptionIndex(entry, text)));
-    const us = i === void 0 ? [] : entry.seg.cueUnits[i];
+    let us = i === void 0 ? [] : entry.seg.cueUnits[i];
+    if (us.length === 0 && entry && !panel && index === void 0) us = matchUnitsByText(entry, text);
     if (us.length === 0) return bucket.get(text) || null;
     const parts = [];
     for (const u of us) {
@@ -734,6 +797,7 @@
     clearTimeout(retryTimer);
     retryTimer = null;
     lastCaptionIndex = 0;
+    emitProgress();
   }
 
   // src/shared/i18n.js
@@ -778,31 +842,53 @@
   var lang = DEFAULT_TARGET_CODE;
   var enabled = true;
   var errorCode = null;
+  var progress = null;
+  function progressState() {
+    if (!progress?.total) return "working";
+    if (progress.done >= progress.total) return "done";
+    if (progress.gaveUp > 0 && progress.done + progress.gaveUp >= progress.total) return "partial";
+    return "working";
+  }
   function badgeText() {
     if (errorCode) {
       const key = `badge.error.${errorCode}`;
       const msg = t(key);
       return msg === key ? t("badge.error.generic") : msg;
     }
-    return t("badge.translatingTo", { lang: languageName(lang, getLocale()) });
+    const name = languageName(lang, getLocale());
+    const state = progressState();
+    if (state === "done") return t("badge.done", { lang: name });
+    if (state === "partial") return t("badge.partial", { lang: name, failed: progress.gaveUp });
+    if (progress?.total) {
+      const percent = Math.min(99, Math.floor(progress.done / progress.total * 100));
+      return t("badge.translatingProgress", { lang: name, percent });
+    }
+    return t("badge.translatingTo", { lang: name });
   }
   function render() {
     if (!badgeEl) return;
     badgeEl.querySelector(".utb-text").textContent = badgeText();
-    badgeEl.classList.toggle("utb-error", !!errorCode);
+    const state = errorCode ? "error" : progressState();
+    badgeEl.classList.toggle("utb-error", state === "error");
+    badgeEl.classList.toggle("utb-done", state === "done");
+    badgeEl.classList.toggle("utb-partial", state === "partial");
   }
   function build() {
     const el = document.createElement("div");
     el.className = "udemy-translator-badge";
     el.innerHTML = `${MARK_SVG}<span class="utb-text"></span><span class="utb-dot"></span>`;
-    el.querySelector(".utb-text").textContent = badgeText();
-    el.classList.toggle("utb-error", !!errorCode);
+    badgeEl = el;
+    render();
     return el;
   }
   function mountTarget() {
     if (anchorEl && anchorEl.offsetParent) return anchorEl.offsetParent;
     const video = document.querySelector("video");
     return video?.parentElement || null;
+  }
+  function setBadgeProgress(p) {
+    progress = p;
+    render();
   }
   function setBadgeLang(l) {
     if (l) lang = l;
@@ -1080,7 +1166,7 @@
       textSpan.dataset.original = textSpan.textContent.trim();
     }
     textSpan.dataset.translated = translation;
-    updateCaptionCache(textSpan.dataset.original, captionText);
+    updateCaptionCache(textSpan.dataset.original.replace(/\s+/g, " ").trim(), captionText);
     if (currentStyle.displayMode !== "original") {
       textSpan.textContent = translation;
     }
@@ -1318,6 +1404,9 @@
     },
     badge: {
       translatingTo: "Translating to {lang}",
+      translatingProgress: "Translating to {lang} {percent}%",
+      done: "\u2713 {lang} translation complete",
+      partial: "{lang} done \xB7 {failed} sentences failed",
       error: {
         RATE_LIMIT: "Rate limited \xB7 retrying soon",
         QUOTA_DAILY: "Daily limit reached",
@@ -1471,6 +1560,9 @@
     },
     badge: {
       translatingTo: "{lang} \uBC88\uC5ED \uC911",
+      translatingProgress: "{lang} \uBC88\uC5ED \uC911 {percent}%",
+      done: "\u2713 {lang} \uBC88\uC5ED \uC644\uB8CC",
+      partial: "{lang} \uBC88\uC5ED \uC644\uB8CC \xB7 {failed}\uBB38\uC7A5 \uC2E4\uD328",
       error: {
         RATE_LIMIT: "\uC694\uCCAD \uD55C\uB3C4 \xB7 \uC7A0\uC2DC \uD6C4 \uC7AC\uC2DC\uB3C4",
         QUOTA_DAILY: "\uC77C\uC77C \uD55C\uB3C4 \uCD08\uACFC",
@@ -1624,6 +1716,9 @@
     },
     badge: {
       translatingTo: "{lang}\u306B\u7FFB\u8A33\u4E2D",
+      translatingProgress: "{lang}\u306B\u7FFB\u8A33\u4E2D {percent}%",
+      done: "\u2713 {lang}\u306E\u7FFB\u8A33\u5B8C\u4E86",
+      partial: "{lang}\u306E\u7FFB\u8A33\u5B8C\u4E86 \xB7 {failed}\u6587\u5931\u6557",
       error: {
         RATE_LIMIT: "\u30EA\u30AF\u30A8\u30B9\u30C8\u5236\u9650 \xB7 \u307E\u3082\u306A\u304F\u518D\u8A66\u884C",
         QUOTA_DAILY: "1\u65E5\u306E\u4E0A\u9650\u306B\u5230\u9054",
@@ -1759,6 +1854,7 @@
     if (error && error.code !== "PARSE_ERROR" && error.code !== "DISABLED") setBadgeError(error.code);
     else if (failedCount === 0 || okCount > 0) setBadgeError(null);
   });
+  onProgress(setBadgeProgress);
   setupNavigationHandler();
   console.log("[UdemyTranslator] content script loaded");
   initVttBridge();

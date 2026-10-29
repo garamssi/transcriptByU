@@ -21,6 +21,16 @@ let lang = DEFAULT_TARGET_CODE;
 let enabled = true;
 // 번역 오류 상태 (null 이면 정상). 오류 중에는 배지를 빨간 점 + 원인 문구로 바꾼다.
 let errorCode = null;
+// 강의 번역 진행률 { total, done, failed, gaveUp } (대본을 모르면 null)
+let progress = null;
+
+/** 진행 상태: 'working' | 'done' | 'partial' (재시도까지 포기한 문장이 남은 채 끝남) */
+function progressState() {
+  if (!progress?.total) return 'working';
+  if (progress.done >= progress.total) return 'done';
+  if (progress.gaveUp > 0 && progress.done + progress.gaveUp >= progress.total) return 'partial';
+  return 'working';
+}
 
 function badgeText() {
   if (errorCode) {
@@ -28,21 +38,33 @@ function badgeText() {
     const msg = t(key);
     return msg === key ? t('badge.error.generic') : msg;
   }
-  return t('badge.translatingTo', { lang: languageName(lang, getLocale()) });
+  const name = languageName(lang, getLocale());
+  const state = progressState();
+  if (state === 'done') return t('badge.done', { lang: name });
+  if (state === 'partial') return t('badge.partial', { lang: name, failed: progress.gaveUp });
+  if (progress?.total) {
+    // 99% 에서 멈춘 것처럼 보이지 않게 내림 처리(전부 끝나야 '완료')
+    const percent = Math.min(99, Math.floor((progress.done / progress.total) * 100));
+    return t('badge.translatingProgress', { lang: name, percent });
+  }
+  return t('badge.translatingTo', { lang: name });
 }
 
 function render() {
   if (!badgeEl) return;
   badgeEl.querySelector('.utb-text').textContent = badgeText();
-  badgeEl.classList.toggle('utb-error', !!errorCode);
+  const state = errorCode ? 'error' : progressState();
+  badgeEl.classList.toggle('utb-error', state === 'error');
+  badgeEl.classList.toggle('utb-done', state === 'done');
+  badgeEl.classList.toggle('utb-partial', state === 'partial');
 }
 
 function build() {
   const el = document.createElement('div');
   el.className = 'udemy-translator-badge';
   el.innerHTML = `${MARK_SVG}<span class="utb-text"></span><span class="utb-dot"></span>`;
-  el.querySelector('.utb-text').textContent = badgeText();
-  el.classList.toggle('utb-error', !!errorCode);
+  badgeEl = el;
+  render();
   return el;
 }
 
@@ -51,6 +73,15 @@ function mountTarget() {
   if (anchorEl && anchorEl.offsetParent) return anchorEl.offsetParent;
   const video = document.querySelector('video');
   return video?.parentElement || null;
+}
+
+/**
+ * 강의 번역 진행률을 배지에 반영한다 (번역 중 N% / 완료 / 일부 실패).
+ * @param {{ total: number, done: number, failed: number, gaveUp: number } | null} p
+ */
+export function setBadgeProgress(p) {
+  progress = p;
+  render();
 }
 
 export function setBadgeLang(l) {

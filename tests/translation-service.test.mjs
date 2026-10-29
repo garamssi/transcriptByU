@@ -208,3 +208,14 @@ test('기다리던 문장이 실패하면 기다린 쪽도 실패로 받는다',
   assert.strictEqual(rb.error.retryAfterMs, 60_000); // 기다린 쪽도 한도 대기 시간을 지킨다
   assert.strictEqual(service.inFlight.size, 0);
 });
+
+test('캐시에 있던 번역은 API 결과를 기다리지 않고 먼저 알린다', async () => {
+  const stored = { [L2_KEY]: { a: 'A' } };
+  const order = [];
+  const { service } = makeService(async (_sp, userText) => {
+    order.push('api');
+    return echoTranslate(userText);
+  }, { stored });
+  await service.translateBatch(req(['a', 'b']), (e) => order.push(Object.keys(e).join(',')));
+  assert.deepStrictEqual(order, ['a', 'api', 'b']);
+});
