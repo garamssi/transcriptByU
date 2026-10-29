@@ -22,7 +22,7 @@ export function buildBatchSystemPrompt(targetCode, context, script) {
 
   let prompt = `You are a subtitle translator for an online course lecture. Translate each line to ${langEnglish} (${endonym}).
 
-INPUT FORMAT: Each line to translate is "N|original text"
+INPUT FORMAT: Each line to translate is "N|original sentence"
 OUTPUT FORMAT: Each line must be "N|translated text"
 
 STRICT RULES:
@@ -34,26 +34,16 @@ STRICT RULES:
 6. Even if input is just 1 line, follow the format exactly
 7. ${langEnglish} ONLY, nothing else. NEVER output any other language
 
-LINE ALIGNMENT RULES (each line is shown on screen at its own time — misplaced text is a subtitle out of sync):
-- Output line N must contain the translation of what input line N says — nothing from line N-1 or N+1.
-- A sentence often continues across lines. Split your translation at the matching point and keep each fragment on its own line, even if the ${langEnglish} word order then feels slightly less natural. Never move a phrase, a verb or a sentence ending to another line.
-- If input line N ends one sentence and starts the next, output line N must also end that sentence and start the next.
-- Never merge two lines into one and never leave a line empty.
-
-Example of a sentence split across lines (translating to Korean):
-Input:
-1|Now let's go back to the controller. Inside the
-2|fetch method, I'm going to invoke the service layer
-3|by passing the mobile number.
-Output:
-1|이제 컨트롤러로 돌아가겠습니다. fetch 메서드
-2|안에서 서비스 계층을 호출하는데,
-3|휴대폰 번호를 전달하겠습니다.
+SENTENCE RULES (each line is shown as the subtitle while that sentence is being spoken):
+- Each input line is one complete spoken sentence, or one part of a very long sentence. Translate it completely and naturally as a single subtitle.
+- If a line is only part of a long sentence (it does not end with . ? or !), translate just that part so it reads as the natural beginning or continuation of the sentence. Do not pull in words from the neighboring parts.
+- Never merge, split, reorder or skip lines.
 
 CONSISTENCY RULES (the whole lecture must read as one coherent text):
-- Use the full transcript below to understand the meaning of each fragment.
+- Use the full transcript below to understand the context of each sentence.
 - Translate the same term the same way every time. Follow the previous translations given with the request; never switch to a different word for a term already translated.
-- Keep technical terms, product names, code identifiers, commands and acronyms (e.g. Spring Boot, Docker, Kubernetes, REST API, @RestController) in their original form.${REGISTER_RULES[lang.code] ? `\n- ${REGISTER_RULES[lang.code]}` : ''}
+- Keep technical terms, product names, code identifiers, commands and acronyms (e.g. Spring Boot, Docker, Kubernetes, REST API, @RestController) in their original form.
+- Ordinary words are NOT code: translate words like account, customer, details or table by their meaning in this lecture's domain (e.g. a bank account is 계좌 in Korean). Keep only real identifiers (CamelCase names, annotations, method/class names) in their original form.${REGISTER_RULES[lang.code] ? `\n- ${REGISTER_RULES[lang.code]}` : ''}
 
 Example (translating to Korean):
 Input:

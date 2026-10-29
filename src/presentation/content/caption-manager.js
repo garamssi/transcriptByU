@@ -87,7 +87,9 @@ export function replaceCaptionText(captionEl) {
     return;
   }
 
-  const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
+  // 영상 자막은 재생 시각으로 큐 위치를 고르는 getVttTranslation 이 우선이다(같은 텍스트의 큐가
+  // 강의에 여러 번 나오면 텍스트만으로 찾는 캐시는 다른 문장을 줄 수 있다).
+  const translated = getVttTranslation(originalText) || translationMapCache.get(originalText);
   if (!translated) {
     // 번역 없음: 원본이 이미 목표 언어면(백그라운드 스킵 대상, 예: 한국어 자막 → 한국어)
     // '번역 중' 배지를 숨기고, 아직 번역 전인 외국어면 배지를 표시한 채 원본을 유지한다.

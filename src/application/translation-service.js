@@ -6,7 +6,7 @@ import { lectureCacheKey } from '../domain/cache-key.js';
 import { isAlreadyTargetLanguage } from '../domain/language-detect.js';
 import { ERROR_CODES, isFatalCode, toApiError } from '../domain/api-error.js';
 
-// MAX_TOKENS·BLOCKED 청크를 반으로 나눠 다시 보내는 최대 깊이 (60 → 30 → 15)
+// MAX_TOKENS·BLOCKED 청크를 반으로 나눠 다시 보내는 최대 깊이 (30 → 15 → 8)
 const MAX_SPLIT_DEPTH = 2;
 
 /**

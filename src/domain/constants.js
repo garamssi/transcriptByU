@@ -30,9 +30,10 @@ export const L2_PREFIX = 'lec_';
 export const L1_MAX_SIZE = 50;
 
 // === Translation ===
-export const CHUNK_SIZE = 60;
-// 첫 청크만 작게 보내 첫 번역이 빨리 화면에 뜨게 한다 (나머지는 CHUNK_SIZE)
-export const FIRST_CHUNK_SIZE = 15;
+// 번역 단위는 문장(큐 2~3개)이라 줄 단위보다 출력이 길다 → 청크당 문장 수를 줄인다.
+export const CHUNK_SIZE = 30;
+// 첫 청크만 작게 보내 첫 번역이 빨리 화면에 뜨게 한다 (나머지는 CHUNK_SIZE). 10단위 ≈ 영상 앞부분 1분
+export const FIRST_CHUNK_SIZE = 10;
 // 청크마다 함께 보내는 '앞서 확정된 번역' 최대 줄 수 (용어·문체 통일용, 입력 토큰만 늘어남)
 export const REFERENCE_MAX_LINES = 80;
 // 전체 대본 문맥 상한(문자). 넘으면 대본 없이 참고 번역만으로 통일한다(1시간 강의 ≈ 5~6만 자).

@@ -296,6 +296,91 @@
     }
   };
 
+  // src/domain/sentence-units.js
+  var MAX_UNIT_CUES = 3;
+  var MAX_UNIT_CHARS = 200;
+  var ABBREVIATIONS = /* @__PURE__ */ new Set(["mr", "mrs", "ms", "dr", "vs", "etc", "e.g", "i.e", "jr", "sr"]);
+  var NUMBER_ABBREVIATIONS = /* @__PURE__ */ new Set(["no", "fig", "st", "vol", "p"]);
+  function sentenceEnds(text) {
+    const ends = [];
+    const re = /[.?!]+["')\]]*(?=\s|$)/g;
+    let m;
+    while (m = re.exec(text)) {
+      const end = m.index + m[0].length;
+      const before = text.slice(0, m.index).match(/([A-Za-z.]+)$/)?.[1]?.toLowerCase();
+      const next = text.slice(end).match(/^\s+(\S)/)?.[1];
+      if (m[0][0] === "." && before && ABBREVIATIONS.has(before)) continue;
+      if (m[0][0] === "." && before && NUMBER_ABBREVIATIONS.has(before) && next && /\d/.test(next)) continue;
+      if (next && /[a-z]/.test(next)) continue;
+      ends.push(end);
+    }
+    return ends;
+  }
+  function buildSentenceUnits(lines) {
+    const starts = [];
+    let text = "";
+    for (const line of lines) {
+      if (text) text += " ";
+      starts.push(text.length);
+      text += line;
+    }
+    const cueSpan = (i) => [starts[i], starts[i] + lines[i].length];
+    const sentences = [];
+    let s = 0;
+    for (const e of [...sentenceEnds(text), text.length]) {
+      const start = text.slice(s, e).search(/\S/);
+      if (start !== -1 && e > s) sentences.push([s + start, e]);
+      s = e;
+    }
+    const overlap = (a, b) => Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0]));
+    const sentCues = sentences.map(() => []);
+    const cueOwner = lines.map((_, i) => {
+      let best = -1, bestLen = 0;
+      sentences.forEach((sent, k) => {
+        const len = overlap(cueSpan(i), sent);
+        if (len > bestLen) {
+          best = k;
+          bestLen = len;
+        }
+      });
+      return best;
+    });
+    cueOwner.forEach((k, i) => {
+      if (k !== -1) sentCues[k].push(i);
+    });
+    sentences.forEach((sent, k) => {
+      if (sentCues[k].length > 0) return;
+      let best = -1, bestLen = 0;
+      lines.forEach((_, i) => {
+        const len = overlap(cueSpan(i), sent);
+        if (len > bestLen) {
+          best = i;
+          bestLen = len;
+        }
+      });
+      if (best !== -1) sentCues[k].push(best);
+    });
+    const units = [];
+    const unitCues = [];
+    sentences.forEach((sent, k) => {
+      const cues = sentCues[k];
+      if (cues.length === 0) return;
+      const len = sent[1] - sent[0];
+      const groups = Math.max(Math.ceil(cues.length / MAX_UNIT_CUES), cues.length > 1 ? Math.ceil(len / MAX_UNIT_CHARS) : 1);
+      const per = Math.ceil(cues.length / Math.min(groups, cues.length));
+      for (let g = 0; g < cues.length; g += per) {
+        const part = cues.slice(g, g + per);
+        const from = g === 0 ? sent[0] : Math.max(sent[0], cueSpan(part[0])[0]);
+        const to = g + per >= cues.length ? sent[1] : Math.min(sent[1], cueSpan(part[part.length - 1])[1]);
+        units.push(text.slice(from, to).trim());
+        unitCues.push(part);
+      }
+    });
+    const cueUnits = lines.map(() => []);
+    unitCues.forEach((cues, u) => cues.forEach((i) => cueUnits[i].push(u)));
+    return { units, cueUnits, unitCues };
+  }
+
   // src/presentation/content/vtt-bridge.js
   var buckets = new LRUCache();
   var processedUrls = /* @__PURE__ */ new Set();
@@ -303,16 +388,76 @@
   var pendingRequests = /* @__PURE__ */ new Map();
   var requestSeq = 0;
   var lectureScripts = new LRUCache();
-  function setLectureScript(lines, source) {
+  function setLectureScript(lines, source, times) {
     const id = currentLectureId();
     const existing = lectureScripts.get(id);
     if (existing && (existing.source === "vtt" || source === "dom")) return;
-    const deduped = lines.filter((l, i) => l && l !== lines[i - 1]);
+    const keep = lines.map((l, i) => !!l && l !== lines[i - 1]);
+    const deduped = lines.filter((_, i) => keep[i]);
     if (deduped.length === 0) return;
-    lectureScripts.set(id, { lines: deduped, source });
+    const positions = /* @__PURE__ */ new Map();
+    deduped.forEach((l, i) => {
+      if (!positions.has(l)) positions.set(l, []);
+      positions.get(l).push(i);
+    });
+    lectureScripts.set(id, {
+      lines: deduped,
+      source,
+      positions,
+      seg: buildSentenceUnits(deduped),
+      times: times ? times.filter((_, i) => keep[i]) : null
+    });
+  }
+  var scriptEntry = (key) => lectureScripts.get(key.slice(key.indexOf("::") + 2));
+  function resolveCueIndices(cueTexts, key = currentLectureKey()) {
+    const entry = scriptEntry(key);
+    let cursor = 0;
+    return cueTexts.map((text, n) => {
+      const ps = entry?.positions.get(text);
+      if (!ps) return void 0;
+      if (n > 0 && text === cueTexts[n - 1] && cursor > 0) return cursor - 1;
+      const i = ps.find((p) => p >= cursor) ?? ps[0];
+      cursor = i + 1;
+      return i;
+    });
+  }
+  var lastCaptionIndex = 0;
+  function resolveCaptionIndex(entry, text) {
+    const ps = entry.positions.get(text);
+    if (!ps) return void 0;
+    let i = ps[0];
+    if (ps.length > 1) {
+      const video = document.querySelector("video");
+      if (entry.times && video) {
+        const t2 = video.currentTime;
+        const dist = (p) => {
+          const [s, e] = entry.times[p];
+          return t2 < s ? s - t2 : t2 > e ? t2 - e : 0;
+        };
+        i = ps.reduce((best, p) => dist(p) < dist(best) ? p : best, ps[0]);
+      } else {
+        i = ps.find((p) => p >= lastCaptionIndex) ?? ps[0];
+      }
+    }
+    lastCaptionIndex = i;
+    return i;
+  }
+  function unitsForCues(cueTexts, key = currentLectureKey(), indices = resolveCueIndices(cueTexts, key)) {
+    const entry = scriptEntry(key);
+    const units = /* @__PURE__ */ new Set();
+    cueTexts.forEach((text, n) => {
+      const i = indices[n];
+      const us = i === void 0 ? [] : entry.seg.cueUnits[i];
+      if (us.length === 0) units.add(text);
+      else us.forEach((u) => units.add(entry.seg.units[u]));
+    });
+    return [...units];
+  }
+  function vttSeconds(ts) {
+    return ts.split(":").reduce((acc, part) => acc * 60 + parseFloat(part.replace(",", ".")), 0);
   }
   function scriptFor(key) {
-    const script = lectureScripts.get(key.slice(key.indexOf("::") + 2))?.lines;
+    const script = scriptEntry(key)?.lines;
     if (!script) return void 0;
     const chars = script.reduce((n, l) => n + l.length + 1, 0);
     if (chars > MAX_SCRIPT_CHARS) {
@@ -366,10 +511,10 @@
           console.log(`[UdemyTranslator:VTT] skipped non-subtitle VTT (thumbnail/sprite): ${url.substring(0, 80)}`);
           return;
         }
-        setLectureScript(cues.map((c) => c.text), "vtt");
-        const uniqueTexts = [...new Set(cues.map((c) => c.text))];
-        console.log(`[UdemyTranslator:VTT] ${cues.length} cues, ${uniqueTexts.length} unique texts`);
-        await requestTranslations(uniqueTexts);
+        setLectureScript(cues.map((c) => c.text), "vtt", cues.map((c) => [vttSeconds(c.startTime), vttSeconds(c.endTime)]));
+        const units = unitsForCues(cues.map((c) => c.text));
+        console.log(`[UdemyTranslator:VTT] ${cues.length} cues \u2192 ${units.length} sentence units`);
+        await requestTranslations(units);
         document.dispatchEvent(new Event("vtt-translations-ready"));
       } catch (err) {
         console.error(`[UdemyTranslator:VTT] error: ${err.message}`);
@@ -568,15 +713,27 @@
       console.error(`[UdemyTranslator:VTT] auto-retry error: ${err?.message || err}`);
     }
   }
-  function getVttTranslation(text, key = currentLectureKey()) {
+  function getVttTranslation(text, key = currentLectureKey(), { panel = false, index } = {}) {
     const bucket = buckets.get(key);
-    return bucket && bucket.get(text) || null;
+    if (!bucket) return null;
+    const entry = scriptEntry(key);
+    const i = index ?? (entry && (panel ? entry.positions.get(text)?.[0] : resolveCaptionIndex(entry, text)));
+    const us = i === void 0 ? [] : entry.seg.cueUnits[i];
+    if (us.length === 0) return bucket.get(text) || null;
+    const parts = [];
+    for (const u of us) {
+      const tr = bucket.get(entry.seg.units[u]);
+      if (!tr) return null;
+      if (!panel || entry.seg.unitCues[u][0] === i) parts.push(tr);
+    }
+    return parts.join(" ");
   }
   function clearVttStore() {
     processedUrls.clear();
     tracker.clear();
     clearTimeout(retryTimer);
     retryTimer = null;
+    lastCaptionIndex = 0;
   }
 
   // src/shared/i18n.js
@@ -740,7 +897,7 @@
       restore();
       return;
     }
-    const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
+    const translated = getVttTranslation(originalText) || translationMapCache.get(originalText);
     if (!translated) {
       restore();
       if (isAlreadyTargetLanguage(originalText, getActiveLang())) hideBadge();
@@ -855,10 +1012,10 @@
       cueTextSpan.textContent = cueTextSpan.dataset.original;
       if (originalEl) originalEl.style.display = "none";
     } else if (currentStyle.displayMode === "translation") {
-      cueTextSpan.textContent = cueTextSpan.dataset.translated || cueTextSpan.dataset.original;
+      cueTextSpan.textContent = cueTextSpan.dataset.translated ?? cueTextSpan.dataset.original;
       if (originalEl) originalEl.style.display = "none";
     } else {
-      cueTextSpan.textContent = cueTextSpan.dataset.translated || cueTextSpan.dataset.original;
+      cueTextSpan.textContent = cueTextSpan.dataset.translated ?? cueTextSpan.dataset.original;
       if (originalEl) originalEl.style.display = "";
     }
   }
@@ -901,25 +1058,29 @@
   }
   function getUntranslatedCues(cueItems) {
     const key = currentLectureKey();
-    return cueItems.filter(({ text, textSpan, container }) => {
+    const indices = resolveCueIndices(cueItems.map(({ text }) => text), key);
+    cueItems.forEach((item, n) => {
+      item.index = indices[n];
+    });
+    return cueItems.filter(({ text, textSpan, container, index }) => {
       if (textSpan.dataset.original) return false;
       const parent = textSpan.closest("p") || textSpan.parentElement;
       const origEl = parent.querySelector(`.${ORIGINAL_CLASS}`);
       if (origEl) return false;
-      const vttTranslation = getVttTranslation(text, key);
-      if (vttTranslation) {
-        applyTranslation(textSpan, container, vttTranslation);
+      const panelText = getVttTranslation(text, key, { panel: true, index });
+      if (panelText !== null) {
+        applyTranslation(textSpan, container, panelText, getVttTranslation(text, key, { index }));
         return false;
       }
       return true;
     });
   }
-  function applyTranslation(textSpan, container, translation) {
+  function applyTranslation(textSpan, container, translation, captionText = translation) {
     if (!textSpan.dataset.original) {
       textSpan.dataset.original = textSpan.textContent.trim();
     }
     textSpan.dataset.translated = translation;
-    updateCaptionCache(textSpan.dataset.original, translation);
+    updateCaptionCache(textSpan.dataset.original, captionText);
     if (currentStyle.displayMode !== "original") {
       textSpan.textContent = translation;
     }
@@ -937,7 +1098,7 @@
       const cueItems = collectCues(panel);
       setLectureScript(cueItems.map(({ text }) => text), "dom");
       const untranslated = getUntranslatedCues(cueItems);
-      toRequest = untranslated.map(({ text }) => text).filter((text) => text && isRequestable(text));
+      toRequest = unitsForCues(untranslated.map(({ text }) => text), currentLectureKey(), untranslated.map(({ index }) => index)).filter((text) => text && isRequestable(text));
       const captionEl = document.querySelector(CAPTION_SELECTOR);
       if (captionEl) replaceCaptionText(captionEl);
     } finally {
@@ -945,7 +1106,7 @@
       isApplying = false;
     }
     if (toRequest.length > 0) {
-      console.log(`[UdemyTranslator] auto-translate: requesting ${toRequest.length} cues`);
+      console.log(`[UdemyTranslator] auto-translate: requesting ${toRequest.length} sentence units`);
       requestTranslations(toRequest).then(({ count }) => {
         if (count > 0) scheduleTranslation(panel);
       }).catch((err) => {
@@ -1023,7 +1184,7 @@
     const cueItems = collectCues(panel);
     if (cueItems.length === 0) return { count: 0, failed: 0, error: null };
     setLectureScript(cueItems.map(({ text }) => text), "dom");
-    const texts = [...new Set(cueItems.map(({ text }) => text))];
+    const texts = unitsForCues(cueItems.map(({ text }) => text));
     resetTracking(texts);
     const { fresh, failedTexts, error } = await requestTranslations(texts, { force: true });
     if (fresh > 0) {

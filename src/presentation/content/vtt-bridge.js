@@ -1,10 +1,11 @@
 import { parseVtt } from '../../infrastructure/vtt/vtt-parser.js';
 import { LRUCache } from '../../infrastructure/cache/lru-cache.js';
 import { resolveCode, DEFAULT_TARGET_CODE } from '../../domain/languages.js';
+import { buildSentenceUnits } from '../../domain/sentence-units.js';
 import { getLectureContext } from './transcript-manager.js';
 import { AUTO_RETRY_BASE_MS, AUTO_RETRY_MAX_ATTEMPTS, AUTO_RETRY_MAX_DELAY_MS, MAX_SCRIPT_CHARS } from '../../domain/constants.js';
 
-// 강의별 번역 버킷: lectureKey → Map<원문, 번역>.
+// 강의별 번역 버킷: lectureKey → Map<번역 단위 원문(문장), 번역>.
 // 전역 단일 Map 을 쓰면, A 강의 요청의 늦은 응답이 B 로 이동한 뒤 도착해
 // 저장소를 오염시킨다(A→B 이동 중 응답 도착). 강의 키로 버킷을 분리하면
 // 저장은 '요청한 강의' 버킷으로, 조회는 '현재 강의' 버킷에서만 이뤄져
@@ -20,8 +21,9 @@ const inFlight = new Set();
 // 요청한 강의 버킷에 바로 채우는 데 쓴다.
 const pendingRequests = new Map();
 let requestSeq = 0;
-// 강의 ID → { lines: 원문 대본(순서대로), source: 'vtt'|'dom' }. 모든 번역 요청에 공통 문맥으로 실어
-// 청크가 달라도 같은 흐름·용어로 번역되게 한다. VTT(전체 큐)가 패널 DOM 보다 완전해 우선한다.
+// 강의 ID → { lines: 원문 대본(큐, 순서대로), source: 'vtt'|'dom', seg: 문장 단위 묶음, index: 큐 원문 → 위치 }.
+// 대본은 모든 번역 요청에 공통 문맥으로 실리고, seg 로 큐를 문장 단위로 묶어 번역·표시한다.
+// VTT(전체 큐)가 패널 DOM 보다 완전해 우선한다.
 // 대본은 원문이라 목표 언어와 무관하므로 언어 없는 강의 ID 로 둔다(초기화 순서·언어 변경에 안 흔들리게).
 const lectureScripts = new LRUCache();
 
@@ -30,20 +32,107 @@ const lectureScripts = new LRUCache();
  * (요청마다 대본이 바뀌면 프롬프트 캐시 접두사가 깨진다).
  * @param {string[]} lines - 순서대로 정렬된 원문 줄
  * @param {'vtt'|'dom'} source
+ * @param {Array<[number, number]>} [times] - 큐별 [시작, 끝] 초 (VTT 만)
  */
-export function setLectureScript(lines, source) {
+export function setLectureScript(lines, source, times) {
   const id = currentLectureId();
   const existing = lectureScripts.get(id);
   if (existing && (existing.source === 'vtt' || source === 'dom')) return;
   // 연속 중복(같은 큐가 두 번 잡힌 경우)만 제거하고 순서는 유지한다.
-  const deduped = lines.filter((l, i) => l && l !== lines[i - 1]);
+  const keep = lines.map((l, i) => !!l && l !== lines[i - 1]);
+  const deduped = lines.filter((_, i) => keep[i]);
   if (deduped.length === 0) return;
-  lectureScripts.set(id, { lines: deduped, source });
+  // 같은 큐 텍스트("and then the" 같은 조각)가 강의 안에 여러 번 나올 수 있어 위치를 모두 기록한다.
+  const positions = new Map();
+  deduped.forEach((l, i) => {
+    if (!positions.has(l)) positions.set(l, []);
+    positions.get(l).push(i);
+  });
+  lectureScripts.set(id, {
+    lines: deduped, source, positions,
+    seg: buildSentenceUnits(deduped),
+    times: times ? times.filter((_, i) => keep[i]) : null,
+  });
+}
+
+const scriptEntry = key => lectureScripts.get(key.slice(key.indexOf('::') + 2));
+
+/**
+ * 순서대로 나열된 큐(패널 행·VTT 큐)를 대본 위치로 맞춘다. 같은 텍스트가 여러 번 나오면
+ * 앞 큐 다음 위치부터 찾아, 반복되는 조각이 첫 등장 위치의 문장을 빌려 쓰지 않게 한다.
+ * @param {string[]} cueTexts
+ * @param {string} [key]
+ * @returns {Array<number|undefined>} 대본에 없는 큐는 undefined
+ */
+export function resolveCueIndices(cueTexts, key = currentLectureKey()) {
+  const entry = scriptEntry(key);
+  let cursor = 0;
+  return cueTexts.map((text, n) => {
+    const ps = entry?.positions.get(text);
+    if (!ps) return undefined;
+    // 대본은 연속 중복을 하나로 줄였으므로, 바로 앞 행과 같은 텍스트는 같은 위치다(커서를 넘기지 않는다).
+    if (n > 0 && text === cueTexts[n - 1] && cursor > 0) return cursor - 1;
+    const i = ps.find(p => p >= cursor) ?? ps[0];
+    cursor = i + 1;
+    return i;
+  });
+}
+
+// 영상 자막으로 마지막에 보여 준 큐 위치 (시간 정보가 없을 때 반복 텍스트 판별용)
+let lastCaptionIndex = 0;
+
+/**
+ * 영상 자막에 뜬 큐 텍스트의 대본 위치. 같은 텍스트가 여러 번 나오면 VTT 시간과 영상 재생 시각으로,
+ * 시간이 없으면(패널 대본) 직전에 보여 준 큐 다음 위치로 고른다.
+ */
+function resolveCaptionIndex(entry, text) {
+  const ps = entry.positions.get(text);
+  if (!ps) return undefined;
+  let i = ps[0];
+  if (ps.length > 1) {
+    const video = document.querySelector('video');
+    if (entry.times && video) {
+      const t = video.currentTime;
+      const dist = p => {
+        const [s, e] = entry.times[p];
+        return t < s ? s - t : t > e ? t - e : 0;
+      };
+      i = ps.reduce((best, p) => (dist(p) < dist(best) ? p : best), ps[0]);
+    } else {
+      i = ps.find(p => p >= lastCaptionIndex) ?? ps[0];
+    }
+  }
+  lastCaptionIndex = i;
+  return i;
+}
+
+/**
+ * 큐들을 보여 주는 데 필요한 번역 단위(문장) 원문 목록. 대본에 없는 큐는 큐 자체가 단위다.
+ * @param {string[]} cueTexts - 순서대로 나열된 큐
+ * @param {string} [key]
+ * @param {Array<number|undefined>} [indices] - 큐별 대본 위치(없으면 순서대로 맞춰 구한다)
+ * @returns {string[]}
+ */
+export function unitsForCues(cueTexts, key = currentLectureKey(), indices = resolveCueIndices(cueTexts, key)) {
+  const entry = scriptEntry(key);
+  const units = new Set();
+  cueTexts.forEach((text, n) => {
+    const i = indices[n];
+    const us = i === undefined ? [] : entry.seg.cueUnits[i];
+    if (us.length === 0) units.add(text);
+    else us.forEach(u => units.add(entry.seg.units[u]));
+  });
+  return [...units];
+}
+
+// VTT 시각("00:01:02.345" 또는 "01:02.345") → 초
+function vttSeconds(ts) {
+  return ts.split(':').reduce((acc, part) => acc * 60 + parseFloat(part.replace(',', '.')), 0);
 }
 
 /** @param {string} key - currentLectureKey() 형식("lang::id") */
 function scriptFor(key) {
-  const script = lectureScripts.get(key.slice(key.indexOf('::') + 2))?.lines;
+  const script = scriptEntry(key)?.lines;
   if (!script) return undefined;
   const chars = script.reduce((n, l) => n + l.length + 1, 0);
   if (chars > MAX_SCRIPT_CHARS) {
@@ -141,11 +230,11 @@ export function initVttBridge() {
         return;
       }
 
-      setLectureScript(cues.map(c => c.text), 'vtt');
-      const uniqueTexts = [...new Set(cues.map(c => c.text))];
-      console.log(`[UdemyTranslator:VTT] ${cues.length} cues, ${uniqueTexts.length} unique texts`);
+      setLectureScript(cues.map(c => c.text), 'vtt', cues.map(c => [vttSeconds(c.startTime), vttSeconds(c.endTime)]));
+      const units = unitsForCues(cues.map(c => c.text));
+      console.log(`[UdemyTranslator:VTT] ${cues.length} cues → ${units.length} sentence units`);
 
-      await requestTranslations(uniqueTexts);
+      await requestTranslations(units);
       document.dispatchEvent(new Event('vtt-translations-ready'));
     } catch (err) {
       console.error(`[UdemyTranslator:VTT] error: ${err.message}`);
@@ -414,14 +503,30 @@ async function retryDue() {
 }
 
 /**
- * 강의 버킷에서 번역을 조회한다.
- * @param {string} text - 원본 텍스트
+ * 큐가 화면에 보일 때 표시할 번역을 조회한다.
+ * 영상 자막: 큐가 속한 문장(들)의 번역 전체 — 큐가 바뀌는 시점(영상 시간)은 Udemy 가 정하고,
+ * 문장이 시작되는 큐부터 그 문장이 끝나는 큐까지 같은 번역이 유지된다.
+ * 대본 패널(panel): 문장 번역은 그 문장의 첫 큐에만 싣고, 이어지는 큐는 '' (같은 문장 반복 방지).
+ * @param {string} text - 큐 원문
  * @param {string} [key] - 조회할 강의 키 (기본: 현재 강의)
- * @returns {string|null}
+ * @param {{ panel?: boolean, index?: number }} [opts] - index: 큐의 대본 위치(패널 행처럼 이미 알면).
+ *   없으면 영상 자막으로 보고 재생 시각으로 위치를 고른다.
+ * @returns {string|null} 아직 번역이 없으면 null
  */
-export function getVttTranslation(text, key = currentLectureKey()) {
+export function getVttTranslation(text, key = currentLectureKey(), { panel = false, index } = {}) {
   const bucket = buckets.get(key);
-  return (bucket && bucket.get(text)) || null;
+  if (!bucket) return null;
+  const entry = scriptEntry(key);
+  const i = index ?? (entry && (panel ? entry.positions.get(text)?.[0] : resolveCaptionIndex(entry, text)));
+  const us = i === undefined ? [] : entry.seg.cueUnits[i];
+  if (us.length === 0) return bucket.get(text) || null; // 대본에 없는 큐: 큐 자체가 단위
+  const parts = [];
+  for (const u of us) {
+    const tr = bucket.get(entry.seg.units[u]);
+    if (!tr) return null;
+    if (!panel || entry.seg.unitCues[u][0] === i) parts.push(tr);
+  }
+  return parts.join(' ');
 }
 
 /**
@@ -434,4 +539,5 @@ export function clearVttStore() {
   tracker.clear();
   clearTimeout(retryTimer);
   retryTimer = null;
+  lastCaptionIndex = 0;
 }

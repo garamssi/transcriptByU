@@ -74,13 +74,13 @@ test('MAX_TOKENS 청크는 반으로 나눠 다시 보낸다', async () => {
   const { service } = makeService(async (_sp, userText) => {
     const n = numbered(userText).length;
     sizes.push(n);
-    if (n > 30) throw new ApiError(C.MAX_TOKENS);
+    if (n > CHUNK_SIZE / 2) throw new ApiError(C.MAX_TOKENS);
     return echoTranslate(userText);
   });
   const res = await service.translateBatch(req(lines(FIRST_CHUNK_SIZE + CHUNK_SIZE)));
   assert.ok(!res.error);
   assert.ok(res.results.every(r => r.translation));
-  assert.deepStrictEqual(sizes, [FIRST_CHUNK_SIZE, CHUNK_SIZE, 30, 30]);
+  assert.deepStrictEqual(sizes, [FIRST_CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE / 2, CHUNK_SIZE / 2]);
 });
 
 test('재번역(force)은 캐시를 건너뛰고, 실패한 줄은 기존 번역을 유지한다', async () => {
