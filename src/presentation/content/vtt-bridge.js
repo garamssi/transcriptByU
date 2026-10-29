@@ -2,7 +2,7 @@ import { parseVtt } from '../../infrastructure/vtt/vtt-parser.js';
 import { LRUCache } from '../../infrastructure/cache/lru-cache.js';
 import { resolveCode, DEFAULT_TARGET_CODE } from '../../domain/languages.js';
 import { getLectureContext } from './transcript-manager.js';
-import { AUTO_RETRY_BASE_MS, AUTO_RETRY_MAX_ATTEMPTS, AUTO_RETRY_MAX_DELAY_MS } from '../../domain/constants.js';
+import { AUTO_RETRY_BASE_MS, AUTO_RETRY_MAX_ATTEMPTS, AUTO_RETRY_MAX_DELAY_MS, MAX_SCRIPT_CHARS } from '../../domain/constants.js';
 
 // 강의별 번역 버킷: lectureKey → Map<원문, 번역>.
 // 전역 단일 Map 을 쓰면, A 강의 요청의 늦은 응답이 B 로 이동한 뒤 도착해
@@ -20,6 +20,38 @@ const inFlight = new Set();
 // 요청한 강의 버킷에 바로 채우는 데 쓴다.
 const pendingRequests = new Map();
 let requestSeq = 0;
+// 강의 ID → { lines: 원문 대본(순서대로), source: 'vtt'|'dom' }. 모든 번역 요청에 공통 문맥으로 실어
+// 청크가 달라도 같은 흐름·용어로 번역되게 한다. VTT(전체 큐)가 패널 DOM 보다 완전해 우선한다.
+// 대본은 원문이라 목표 언어와 무관하므로 언어 없는 강의 ID 로 둔다(초기화 순서·언어 변경에 안 흔들리게).
+const lectureScripts = new LRUCache();
+
+/**
+ * 강의 대본을 등록한다. 이미 VTT 대본이 있으면 DOM 대본으로 덮어쓰지 않는다
+ * (요청마다 대본이 바뀌면 프롬프트 캐시 접두사가 깨진다).
+ * @param {string[]} lines - 순서대로 정렬된 원문 줄
+ * @param {'vtt'|'dom'} source
+ */
+export function setLectureScript(lines, source) {
+  const id = currentLectureId();
+  const existing = lectureScripts.get(id);
+  if (existing && (existing.source === 'vtt' || source === 'dom')) return;
+  // 연속 중복(같은 큐가 두 번 잡힌 경우)만 제거하고 순서는 유지한다.
+  const deduped = lines.filter((l, i) => l && l !== lines[i - 1]);
+  if (deduped.length === 0) return;
+  lectureScripts.set(id, { lines: deduped, source });
+}
+
+/** @param {string} key - currentLectureKey() 형식("lang::id") */
+function scriptFor(key) {
+  const script = lectureScripts.get(key.slice(key.indexOf('::') + 2))?.lines;
+  if (!script) return undefined;
+  const chars = script.reduce((n, l) => n + l.length + 1, 0);
+  if (chars > MAX_SCRIPT_CHARS) {
+    console.warn(`[UdemyTranslator:VTT] transcript too long for context (${chars} chars) — translating with references only`);
+    return undefined;
+  }
+  return script;
+}
 
 // 현재 목표 언어 (캐시 키 구성용). content 스크립트 초기화/설정 변경 시 갱신.
 let currentLang = DEFAULT_TARGET_CODE;
@@ -50,9 +82,13 @@ export function getActiveLang() {
  * @returns {string}
  */
 export function currentLectureKey() {
+  return `${currentLang}::${currentLectureId()}`;
+}
+
+/** URL 기반 강의 ID(코스 슬러그/강의 번호). 언어와 무관하다. */
+function currentLectureId() {
   const m = location.pathname.match(/\/course\/([^/]+)\/learn\/lecture\/(\d+)/);
-  const id = m ? `${m[1]}/${m[2]}` : location.pathname;
-  return `${currentLang}::${id}`;
+  return m ? `${m[1]}/${m[2]}` : location.pathname;
 }
 
 function getOrCreateBucket(key) {
@@ -105,6 +141,7 @@ export function initVttBridge() {
         return;
       }
 
+      setLectureScript(cues.map(c => c.text), 'vtt');
       const uniqueTexts = [...new Set(cues.map(c => c.text))];
       console.log(`[UdemyTranslator:VTT] ${cues.length} cues, ${uniqueTexts.length} unique texts`);
 
@@ -132,6 +169,31 @@ export function initVttBridge() {
   window.postMessage({ type: 'UDEMY_VTT_BRIDGE_READY' }, window.location.origin);
 }
 
+const CONTEXT_WAIT_MS = 2000;
+const CONTEXT_POLL_MS = 150;
+// 강의 ID → 제목 대기 Promise. 강의당 한 번만 기다린다 — 사이드바를 닫아 제목이 끝내 없으면
+// 요청마다 대기하지 않고, 동시에 들어온 요청(VTT·DOM 경로)은 같은 대기를 공유해 같은 키로 보낸다.
+const contextWaits = new Map();
+
+/** 섹션·강의 제목이 렌더될 때까지 잠깐 기다린다(강의당 최대 CONTEXT_WAIT_MS 한 번, 이미 있으면 즉시). */
+async function waitForLectureContext() {
+  const id = currentLectureId();
+  let wait = contextWaits.get(id);
+  if (!wait) {
+    wait = (async () => {
+      const deadline = Date.now() + CONTEXT_WAIT_MS;
+      let ctx = getLectureContext();
+      while ((!ctx.lecture || !ctx.section) && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, CONTEXT_POLL_MS));
+        ctx = getLectureContext();
+      }
+    })();
+    contextWaits.set(id, wait);
+  }
+  await wait;
+  return getLectureContext();
+}
+
 /**
  * 주어진 원본 텍스트들을 배치 번역 요청하여 해당 강의 버킷에 저장한다.
  * VTT 캡처·DOM 자동 요청·수동 재번역·자동 재시도 네 경로가 공통으로 사용한다. 캐시가 비어 있으면
@@ -156,19 +218,28 @@ export async function requestTranslations(texts, { force = false } = {}) {
   const targetCode = resolveCode(targetLang);
   currentLang = targetCode;
 
-  const ctx = getLectureContext();
   const key = currentLectureKey(); // 요청 시점의 강의 키(URL 기반, 안정적)를 캡처 — 늦은 응답도 이 강의로 저장
 
   // 이미 요청 진행 중인 텍스트는 제외한다. 완료 처리는 진행 중인 호출이 담당하고,
   // 그 호출이 버킷을 채운 뒤 재스캔(vtt-translations-ready / 자동요청 reschedule)에서
   // 화면에 반영되므로, 여기서 재전송하지 않아도 누락되지 않는다.
   // 진행 중인 호출이 실패하면 그 호출이 추적기에 실패를 기록하므로 재시도도 누락되지 않는다.
+  // (아래 제목 대기 중에 다른 경로가 같은 문장을 보내지 않도록, 대기 전에 표시한다.)
   const marker = t => `${key} ${t}`;
   const toSend = uniqueTexts.filter(t => !inFlight.has(marker(t)));
   if (toSend.length === 0) return empty;
   toSend.forEach(t => inFlight.add(marker(t)));
   const track = trackerFor(key);
   toSend.forEach(t => track.set(t, { attempts: track.get(t)?.attempts || 0, state: 'pending' }));
+
+  // 영속 캐시 키에는 사이드바의 섹션·강의 제목이 들어간다. 페이지 로드 직후엔 비어 있을 수 있어
+  // 그대로 보내면 '제목 없는 키'에 저장돼, 다음 방문(제목 있음)에 캐시를 못 찾고 강의 전체를 다시 번역한다.
+  const ctx = await waitForLectureContext();
+  if (currentLectureKey() !== key) {
+    // 기다리는 사이 다른 강의로 이동 — 보내지 않는다(돌아오면 그 강의 경로가 다시 요청한다).
+    toSend.forEach(t => { inFlight.delete(marker(t)); track.delete(t); });
+    return empty;
+  }
 
   const requestId = `${Date.now().toString(36)}-${++requestSeq}`;
   pendingRequests.set(requestId, key);
@@ -179,6 +250,7 @@ export async function requestTranslations(texts, { force = false } = {}) {
       type: 'TRANSLATE_BATCH',
       requestId,
       texts: toSend,
+      script: scriptFor(key),
       targetCode,
       course: ctx.course,
       lecture: ctx.lecture,

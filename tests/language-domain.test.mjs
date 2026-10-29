@@ -38,3 +38,15 @@ test('isAlreadyTargetLanguage exact-skips when sourceCode === targetCode', () =>
 test('lectureCacheKey uses the code verbatim', () => {
   assert.strictEqual(lectureCacheKey('ko', 'c', 's', 'l'), 'ko::c||s||l');
 });
+
+test('한국어는 합니다체 고정, 대본은 시스템 프롬프트에, 참고 번역은 사용자 메시지에', async () => {
+  const { buildBatchUserText } = await import('../src/domain/prompt-builder.js');
+  const p = buildBatchSystemPrompt('ko', {}, ['hello there', 'general kenobi']);
+  assert.ok(p.includes('합니다체'));
+  assert.ok(p.includes('<transcript>\nhello there\ngeneral kenobi\n</transcript>'));
+  assert.ok(!buildBatchSystemPrompt('es', {}).includes('합니다체'));
+  const u = buildBatchUserText(['a b'], [['x', 'X']]);
+  assert.ok(u.includes('x => X'));
+  assert.ok(u.endsWith('[1 lines — output exactly 1 lines]\n1|a b'));
+  assert.ok(!buildBatchUserText(['a']).includes('previous_translations'));
+});

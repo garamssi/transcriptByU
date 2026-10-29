@@ -15,12 +15,12 @@ test('assertValidModel: 쉘 메타문자가 든 모델명은 거부', () => {
   assert.throws(() => assertValidModel('$(whoami)'), /INVALID_MODEL/);
 });
 
-test('buildClaudeInvocation: 비-Windows는 프롬프트를 argv로 전달(현행 동작)', () => {
+test('buildClaudeInvocation: 비-Windows도 프롬프트를 stdin으로 전달(긴 대본 대비 argv 길이 제한 회피)', () => {
   const inv = buildClaudeInvocation({ prompt: 'hello world', model: 'claude-sonnet-5-5', isWindows: false, timeout: 1000 });
   assert.strictEqual(inv.command, 'claude');
-  assert.deepStrictEqual(inv.args, ['-p', 'hello world', '--model', 'claude-sonnet-5-5']);
-  assert.strictEqual(inv.stdinInput, null);
-  assert.deepStrictEqual(inv.options.stdio, ['ignore', 'pipe', 'pipe']);
+  assert.deepStrictEqual(inv.args, ['-p', '--model', 'claude-sonnet-5-5']);
+  assert.strictEqual(inv.stdinInput, 'hello world');
+  assert.deepStrictEqual(inv.options.stdio, ['pipe', 'pipe', 'pipe']);
   assert.strictEqual(inv.options.shell, undefined);
   assert.strictEqual(inv.options.timeout, 1000);
 });
@@ -39,7 +39,7 @@ test('buildClaudeInvocation: model 미지정 시 --model 없음', () => {
   const win = buildClaudeInvocation({ prompt: 'x', isWindows: true, timeout: 1 });
   assert.deepStrictEqual(win.args, ['-p']);
   const mac = buildClaudeInvocation({ prompt: 'x', isWindows: false, timeout: 1 });
-  assert.deepStrictEqual(mac.args, ['-p', 'x']);
+  assert.deepStrictEqual(mac.args, ['-p']);
 });
 
 test('buildClaudeInvocation: 잘못된 model 은 예외', () => {

@@ -10,26 +10,20 @@ function assertValidModel(model) {
 }
 
 // 반환: { command, args, options, stdinInput }
-// - 비-Windows: 프롬프트를 argv 로 전달(현행 동작 그대로), stdinInput = null
-// - Windows: claude.cmd 실행을 위해 shell:true, 프롬프트는 stdin 으로 전달(인젝션 방지)
+// 프롬프트는 모든 플랫폼에서 stdin 으로 전달한다. 강의 전체 대본이 들어가 프롬프트가
+// 커지면 argv 한 인자의 길이 제한(Linux 128KB 등)에 걸리고, argv 는 프로세스 목록에도 노출된다.
+// - Windows: claude.cmd 실행을 위해 shell:true (프롬프트가 argv 에 없어 인젝션 위험 없음)
 function buildClaudeInvocation({ prompt, model, isWindows, timeout }) {
   assertValidModel(model);
   const modelArgs = model ? ['--model', model] : [];
-
-  if (isWindows) {
-    return {
-      command: 'claude',
-      args: ['-p', ...modelArgs],
-      options: { timeout, stdio: ['pipe', 'pipe', 'pipe'], shell: true },
-      stdinInput: prompt,
-    };
-  }
+  const options = { timeout, stdio: ['pipe', 'pipe', 'pipe'] };
+  if (isWindows) options.shell = true;
 
   return {
     command: 'claude',
-    args: ['-p', prompt, ...modelArgs],
-    options: { timeout, stdio: ['ignore', 'pipe', 'pipe'] },
-    stdinInput: null,
+    args: ['-p', ...modelArgs],
+    options,
+    stdinInput: prompt,
   };
 }
 

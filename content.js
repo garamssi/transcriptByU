@@ -26,6 +26,7 @@
     UI_LANG: "uiLang"
   };
   var L1_MAX_SIZE = 50;
+  var MAX_SCRIPT_CHARS = 15e4;
   var AUTO_RETRY_BASE_MS = 3e4;
   var AUTO_RETRY_MAX_DELAY_MS = 5 * 6e4;
   var AUTO_RETRY_MAX_ATTEMPTS = 6;
@@ -301,6 +302,25 @@
   var inFlight = /* @__PURE__ */ new Set();
   var pendingRequests = /* @__PURE__ */ new Map();
   var requestSeq = 0;
+  var lectureScripts = new LRUCache();
+  function setLectureScript(lines, source) {
+    const id = currentLectureId();
+    const existing = lectureScripts.get(id);
+    if (existing && (existing.source === "vtt" || source === "dom")) return;
+    const deduped = lines.filter((l, i) => l && l !== lines[i - 1]);
+    if (deduped.length === 0) return;
+    lectureScripts.set(id, { lines: deduped, source });
+  }
+  function scriptFor(key) {
+    const script = lectureScripts.get(key.slice(key.indexOf("::") + 2))?.lines;
+    if (!script) return void 0;
+    const chars = script.reduce((n, l) => n + l.length + 1, 0);
+    if (chars > MAX_SCRIPT_CHARS) {
+      console.warn(`[UdemyTranslator:VTT] transcript too long for context (${chars} chars) \u2014 translating with references only`);
+      return void 0;
+    }
+    return script;
+  }
   var currentLang = DEFAULT_TARGET_CODE;
   function setActiveLang(lang2) {
     if (lang2) currentLang = lang2;
@@ -309,9 +329,11 @@
     return currentLang;
   }
   function currentLectureKey() {
+    return `${currentLang}::${currentLectureId()}`;
+  }
+  function currentLectureId() {
     const m = location.pathname.match(/\/course\/([^/]+)\/learn\/lecture\/(\d+)/);
-    const id = m ? `${m[1]}/${m[2]}` : location.pathname;
-    return `${currentLang}::${id}`;
+    return m ? `${m[1]}/${m[2]}` : location.pathname;
   }
   function getOrCreateBucket(key) {
     let bucket = buckets.get(key);
@@ -344,6 +366,7 @@
           console.log(`[UdemyTranslator:VTT] skipped non-subtitle VTT (thumbnail/sprite): ${url.substring(0, 80)}`);
           return;
         }
+        setLectureScript(cues.map((c) => c.text), "vtt");
         const uniqueTexts = [...new Set(cues.map((c) => c.text))];
         console.log(`[UdemyTranslator:VTT] ${cues.length} cues, ${uniqueTexts.length} unique texts`);
         await requestTranslations(uniqueTexts);
@@ -364,6 +387,26 @@
     });
     window.postMessage({ type: "UDEMY_VTT_BRIDGE_READY" }, window.location.origin);
   }
+  var CONTEXT_WAIT_MS = 2e3;
+  var CONTEXT_POLL_MS = 150;
+  var contextWaits = /* @__PURE__ */ new Map();
+  async function waitForLectureContext() {
+    const id = currentLectureId();
+    let wait = contextWaits.get(id);
+    if (!wait) {
+      wait = (async () => {
+        const deadline = Date.now() + CONTEXT_WAIT_MS;
+        let ctx = getLectureContext();
+        while ((!ctx.lecture || !ctx.section) && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, CONTEXT_POLL_MS));
+          ctx = getLectureContext();
+        }
+      })();
+      contextWaits.set(id, wait);
+    }
+    await wait;
+    return getLectureContext();
+  }
   async function requestTranslations(texts, { force = false } = {}) {
     const empty = { count: 0, fresh: 0, failedTexts: [], error: null };
     const uniqueTexts = [...new Set(texts)].filter(Boolean);
@@ -371,7 +414,6 @@
     const { targetLang } = await chrome.storage.local.get("targetLang");
     const targetCode = resolveCode(targetLang);
     currentLang = targetCode;
-    const ctx = getLectureContext();
     const key = currentLectureKey();
     const marker = (t2) => `${key} ${t2}`;
     const toSend = uniqueTexts.filter((t2) => !inFlight.has(marker(t2)));
@@ -379,6 +421,14 @@
     toSend.forEach((t2) => inFlight.add(marker(t2)));
     const track = trackerFor(key);
     toSend.forEach((t2) => track.set(t2, { attempts: track.get(t2)?.attempts || 0, state: "pending" }));
+    const ctx = await waitForLectureContext();
+    if (currentLectureKey() !== key) {
+      toSend.forEach((t2) => {
+        inFlight.delete(marker(t2));
+        track.delete(t2);
+      });
+      return empty;
+    }
     const requestId = `${Date.now().toString(36)}-${++requestSeq}`;
     pendingRequests.set(requestId, key);
     let response;
@@ -387,6 +437,7 @@
         type: "TRANSLATE_BATCH",
         requestId,
         texts: toSend,
+        script: scriptFor(key),
         targetCode,
         course: ctx.course,
         lecture: ctx.lecture,
@@ -884,6 +935,7 @@
     let toRequest = [];
     try {
       const cueItems = collectCues(panel);
+      setLectureScript(cueItems.map(({ text }) => text), "dom");
       const untranslated = getUntranslatedCues(cueItems);
       toRequest = untranslated.map(({ text }) => text).filter((text) => text && isRequestable(text));
       const captionEl = document.querySelector(CAPTION_SELECTOR);
@@ -970,6 +1022,7 @@
     if (!panel) return { count: 0, failed: 0, error: null };
     const cueItems = collectCues(panel);
     if (cueItems.length === 0) return { count: 0, failed: 0, error: null };
+    setLectureScript(cueItems.map(({ text }) => text), "dom");
     const texts = [...new Set(cueItems.map(({ text }) => text))];
     resetTracking(texts);
     const { fresh, failedTexts, error } = await requestTranslations(texts, { force: true });

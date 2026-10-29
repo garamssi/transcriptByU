@@ -25,8 +25,13 @@ export async function callClaude(systemPrompt, userText, apiKey, model, maxToken
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userText }]
+        // 시스템 프롬프트(규칙 + 강의 전체 대본)는 같은 강의의 청크 요청마다 동일하다 →
+        // 프롬프트 캐시(5분)로 두 번째 청크부터 입력을 캐시 읽기(약 0.1배 단가)로 처리한다.
+        system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: userText }],
+        // 5.5 모델은 thinking 이 기본으로 켜져 있다. 자막 번역엔 깊은 추론이 필요 없어 effort 를
+        // 낮춰 지연·비용을 줄인다(thinking 자체는 5.5 에서 끌 수 없음).
+        output_config: { effort: 'low' },
       }),
       signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
     });

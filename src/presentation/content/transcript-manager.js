@@ -1,7 +1,7 @@
 import { SELECTORS, LECTURE_SELECTORS, ORIGINAL_CLASS, SETTLE_DELAY_MS, CAPTION_SELECTOR } from '../../domain/constants.js';
 import { currentStyle } from './style-manager.js';
 import { replaceCaptionText, updateCaptionCache, clearCaptionCache } from './caption-manager.js';
-import { getVttTranslation, requestTranslations, currentLectureKey, isRequestable, resetTracking } from './vtt-bridge.js';
+import { getVttTranslation, requestTranslations, currentLectureKey, isRequestable, resetTracking, setLectureScript } from './vtt-bridge.js';
 
 let observer = null;
 let panelFinderObserver = null;
@@ -154,6 +154,8 @@ function applyVttTranslations(panel) {
   let toRequest = [];
   try {
     const cueItems = collectCues(panel);
+    // VTT 를 못 잡은 경우에도 패널 대본을 문맥으로 쓸 수 있게 등록한다(VTT 대본이 있으면 무시됨).
+    setLectureScript(cueItems.map(({ text }) => text), 'dom');
     // 저장된 VTT 번역을 붙이고, 아직 번역 없는 큐 목록을 돌려받는다.
     const untranslated = getUntranslatedCues(cueItems);
 
@@ -284,6 +286,7 @@ export async function retranslateAll() {
   const cueItems = collectCues(panel);
   if (cueItems.length === 0) return { count: 0, failed: 0, error: null };
 
+  setLectureScript(cueItems.map(({ text }) => text), 'dom');
   const texts = [...new Set(cueItems.map(({ text }) => text))];
   // 실패·포기 상태로 남은 문장도 다시 요청할 수 있게 추적 기록을 지운다.
   resetTracking(texts);

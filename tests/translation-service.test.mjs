@@ -5,9 +5,10 @@ import { LRUCache } from '../src/infrastructure/cache/lru-cache.js';
 import { ApiError, ERROR_CODES as C } from '../src/domain/api-error.js';
 import { CHUNK_SIZE, FIRST_CHUNK_SIZE } from '../src/domain/constants.js';
 
-// 입력 "N|원문" 줄을 "N|T:원문" 으로 번역하는 가짜 API
+// 입력 "N|원문" 줄을 "N|T:원문" 으로 번역하는 가짜 API (참고 번역 블록은 무시)
+const numbered = (userText) => userText.split('\n').filter(l => /^\d+\|/.test(l));
 function echoTranslate(userText) {
-  return userText.split('\n').slice(1).map(l => {
+  return numbered(userText).map(l => {
     const i = l.indexOf('|');
     return `${l.slice(0, i)}|T:${l.slice(i + 1)}`;
   }).join('\n');
@@ -71,7 +72,7 @@ test('치명적 오류(일일 한도) 후 남은 청크는 보내지 않는다',
 test('MAX_TOKENS 청크는 반으로 나눠 다시 보낸다', async () => {
   const sizes = [];
   const { service } = makeService(async (_sp, userText) => {
-    const n = userText.split('\n').length - 1;
+    const n = numbered(userText).length;
     sizes.push(n);
     if (n > 30) throw new ApiError(C.MAX_TOKENS);
     return echoTranslate(userText);
@@ -121,7 +122,7 @@ test('느린 요청은 재시도 정보와 함께 SLOW 경고로 기록된다', 
 test('첫 청크는 작게 보내고, 청크마다 부분 결과를 바로 알린다', async () => {
   const sizes = [];
   const { service } = makeService(async (_sp, userText) => {
-    sizes.push(userText.split('\n').length - 1);
+    sizes.push(numbered(userText).length);
     return echoTranslate(userText);
   });
   const partials = [];
@@ -131,4 +132,79 @@ test('첫 청크는 작게 보내고, 청크마다 부분 결과를 바로 알�
   assert.deepStrictEqual(sizes, [FIRST_CHUNK_SIZE, CHUNK_SIZE, 5]);
   assert.deepStrictEqual(partials.map(p => Object.keys(p).length), [FIRST_CHUNK_SIZE, CHUNK_SIZE, 5]);
   assert.strictEqual(partials[0][texts[0]], `T:${texts[0]}`);
+});
+
+test('모든 청크가 같은 시스템 프롬프트(대본 포함)를 쓰고, 앞 청크 번역을 참고로 넘긴다', async () => {
+  const systems = [];
+  const users = [];
+  const { service } = makeService(async (sp, userText) => {
+    systems.push(sp);
+    users.push(userText);
+    return echoTranslate(userText);
+  });
+  const texts = lines(FIRST_CHUNK_SIZE + 3);
+  const res = await service.translateBatch(req(texts, { script: texts }));
+  assert.ok(!res.error);
+  assert.strictEqual(systems.length, 2);
+  assert.strictEqual(systems[0], systems[1]);
+  assert.ok(systems[0].includes('<transcript>') && systems[0].includes(texts[FIRST_CHUNK_SIZE + 2]));
+  assert.ok(!users[0].includes('<previous_translations>'));
+  assert.ok(users[1].includes(`${texts[0]} => T:${texts[0]}`));
+});
+
+test('캐시된 번역도 참고로 넘기고, 재번역(force)은 넘기지 않는다', async () => {
+  const users = [];
+  const stored = { [L2_KEY]: { old: 'OLD' } };
+  const { service } = makeService(async (_sp, userText) => {
+    users.push(userText);
+    return echoTranslate(userText);
+  }, { stored });
+  await service.translateBatch(req(['new']));
+  assert.ok(users[0].includes('old => OLD'));
+  await service.translateBatch(req(['old'], { force: true }));
+  assert.ok(!users[1].includes('<previous_translations>'));
+});
+
+test('같은 문장을 동시에 요청하면 API 는 한 번만 부르고 둘 다 결과를 받는다', async () => {
+  let calls = 0;
+  let release;
+  const gate = new Promise(r => { release = r; });
+  const { service } = makeService(async (_sp, userText) => {
+    calls++;
+    await gate;
+    return echoTranslate(userText);
+  });
+  const partials = [];
+  const a = service.translateBatch(req(['x', 'y']));
+  await new Promise(r => setTimeout(r, 0));
+  const b = service.translateBatch(req(['x', 'y', 'z']), (e) => partials.push(e));
+  await new Promise(r => setTimeout(r, 0));
+  release();
+  const [ra, rb] = await Promise.all([a, b]);
+  assert.strictEqual(calls, 2); // a 의 [x,y] 1번 + b 의 [z] 1번
+  assert.deepStrictEqual(ra.results.map(r => r.translation), ['T:x', 'T:y']);
+  assert.deepStrictEqual(rb.results.map(r => r.translation), ['T:x', 'T:y', 'T:z']);
+  // 기다린 문장(x, y)은 한 번에 모아서, 직접 번역한 z 는 따로 알린다
+  assert.ok(partials.some(p => p.x === 'T:x' && p.y === 'T:y'));
+  assert.strictEqual(partials.length, 2);
+  assert.strictEqual(service.inFlight.size, 0);
+});
+
+test('기다리던 문장이 실패하면 기다린 쪽도 실패로 받는다', async () => {
+  let release;
+  const gate = new Promise(r => { release = r; });
+  const { service } = makeService(async () => {
+    await gate;
+    throw new ApiError(C.RATE_LIMIT, { status: 429, retryAfterMs: 60_000 });
+  });
+  const a = service.translateBatch(req(['x']));
+  await new Promise(r => setTimeout(r, 0));
+  const b = service.translateBatch(req(['x']));
+  await new Promise(r => setTimeout(r, 0));
+  release();
+  const [, rb] = await Promise.all([a, b]);
+  assert.strictEqual(rb.results[0].error, C.RATE_LIMIT);
+  assert.strictEqual(rb.error.code, C.RATE_LIMIT);
+  assert.strictEqual(rb.error.retryAfterMs, 60_000); // 기다린 쪽도 한도 대기 시간을 지킨다
+  assert.strictEqual(service.inFlight.size, 0);
 });

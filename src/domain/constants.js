@@ -33,6 +33,10 @@ export const L1_MAX_SIZE = 50;
 export const CHUNK_SIZE = 60;
 // 첫 청크만 작게 보내 첫 번역이 빨리 화면에 뜨게 한다 (나머지는 CHUNK_SIZE)
 export const FIRST_CHUNK_SIZE = 15;
+// 청크마다 함께 보내는 '앞서 확정된 번역' 최대 줄 수 (용어·문체 통일용, 입력 토큰만 늘어남)
+export const REFERENCE_MAX_LINES = 80;
+// 전체 대본 문맥 상한(문자). 넘으면 대본 없이 참고 번역만으로 통일한다(1시간 강의 ≈ 5~6만 자).
+export const MAX_SCRIPT_CHARS = 150_000;
 
 // === API 요청 제어 ===
 // 응답 대기 상한. 60줄 청크 + thinking 은 수십 초 걸릴 수 있어 넉넉히 둔다
