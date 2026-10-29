@@ -7,6 +7,11 @@ import { redactSecrets } from '../../domain/api-error.js';
  */
 let writeChain = Promise.resolve();
 
+// 같은 오류(같은 코드·프로바이더·모델·강의)가 이 시간 안에 다시 나면 새 항목 대신 기존 항목의 횟수를 올린다.
+// 자동 재시도가 같은 오류를 반복할 때 로그가 같은 카드로 가득 차 진짜 오류가 밀려나지 않게 한다.
+const MERGE_WINDOW_MS = 10 * 60_000;
+const signature = e => [e.level, e.code, e.provider, e.model, e.course, e.section, e.lecture, e.status].join('');
+
 /**
  * @param {object} entry
  * @param {'error'|'warn'} entry.level
@@ -23,7 +28,15 @@ export function appendErrorLog(entry) {
   writeChain = writeChain.then(async () => {
     const stored = await chrome.storage.local.get(ERROR_LOG_KEY);
     const list = Array.isArray(stored[ERROR_LOG_KEY]) ? stored[ERROR_LOG_KEY] : [];
-    list.unshift(record);
+    const sig = signature(record);
+    const dup = list.findIndex(e => signature(e) === sig && record.ts - e.ts < MERGE_WINDOW_MS);
+    if (dup !== -1) {
+      const prev = list.splice(dup, 1)[0];
+      // id 를 유지해 화면이 같은 카드를 갱신하게 한다(새 카드로 다시 그리지 않음).
+      list.unshift({ ...record, id: prev.id, firstTs: prev.firstTs || prev.ts, count: (prev.count || 1) + 1 });
+    } else {
+      list.unshift(record);
+    }
     await chrome.storage.local.set({ [ERROR_LOG_KEY]: list.slice(0, ERROR_LOG_MAX) });
   }).catch(err => console.warn('[UdemyTranslator] error log write failed:', err?.message || err));
   return writeChain;

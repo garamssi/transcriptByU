@@ -106,6 +106,7 @@
     "lines": "{count} lines",
     "failedLines": "{failed}/{lines} lines failed",
     "took": "took {sec}s",
+    "repeated": "repeated ×{count}",
     "waited": "waited {sec}s",
     "retryAfter": "retry after {sec}s",
     "noLecture": "(no lecture info)",

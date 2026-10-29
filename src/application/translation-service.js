@@ -344,7 +344,11 @@ export class TranslationService {
         onRetry: (code, waitMs) => retries.push({ code, waitMs }),
       });
       const durationMs = this.now() - startedAt;
-      if (durationMs >= SLOW_REQUEST_MS) {
+      // 재시도(한도 대기 등) 없이 오래 걸린 건 응답 생성 시간이라 정상이다(Claude Code 는 청크당 10~30초).
+      // 재시도가 끼었으면 10초, 아니면 프로바이더별 정상 범위를 넘을 때만 '느린 요청'으로 남긴다.
+      const slowMs = retries.length > 0 ? SLOW_REQUEST_MS
+        : job.provider === 'claude-code' ? Math.max(60_000, lineCount * 2000) : Math.max(SLOW_REQUEST_MS * 2, lineCount * 1000);
+      if (durationMs >= slowMs) {
         const waitMs = retries.reduce((s, r) => s + r.waitMs, 0);
         const reasons = [...new Set(retries.map(r => r.code))].join(', ');
         this._log(job, {

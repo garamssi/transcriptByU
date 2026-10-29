@@ -1079,8 +1079,9 @@ mark.cache-hl {
   overflow: hidden;
   /* flex 열 안에서 overflow:hidden 이면 최소 높이가 0 이 돼, 로그가 쌓이면 스크롤 대신 카드가 찌그러진다 */
   flex-shrink: 0;
-  animation: logIn 220ms ease both;
 }
+/* 등장 애니메이션은 새로 추가된 카드에만(기존 카드는 갱신·이동돼도 깜빡이지 않게) */
+.log-card.is-entering { animation: logIn 220ms ease both; }
 .log-card::before {
   content: "";
   position: absolute;
@@ -1158,6 +1159,13 @@ mark.cache-hl {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.log-chip--count {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--c);
+  border: 1px solid var(--c-line);
+  background: transparent;
 }
 .log-chip--code {
   font-family: var(--mono);

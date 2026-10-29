@@ -106,6 +106,7 @@
     "lines": "{count}줄",
     "failedLines": "{failed}/{lines}줄 실패",
     "took": "{sec}초 소요",
+    "repeated": "{count}회 반복",
     "waited": "대기 {sec}초",
     "retryAfter": "{sec}초 후 재시도 권장",
     "noLecture": "(강의 정보 없음)",

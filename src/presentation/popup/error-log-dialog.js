@@ -84,7 +84,7 @@ export function initErrorLogDialog({
   // 백그라운드가 새 로그를 쓰면 배지·열린 화면을 바로 갱신한다.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[ERROR_LOG_KEY]) {
-      if (isOpen) load(false);
+      if (isOpen) scheduleLoad();
       else refreshBadge();
     }
   });
@@ -96,6 +96,15 @@ export function initErrorLogDialog({
     openBtn.classList.toggle('has-errors', unread > 0);
   }
 
+  // 열린 상태에서 로그가 연달아 쓰이면(청크마다 한 건) 짧게 모아 한 번만 다시 그린다.
+  let loadTimer = null;
+  function scheduleLoad() {
+    clearTimeout(loadTimer);
+    loadTimer = setTimeout(() => load(false), 150);
+  }
+
+  let timeTimer = null;
+
   async function open() {
     isOpen = true;
     overlay.classList.add('open');
@@ -103,64 +112,134 @@ export function initErrorLogDialog({
     await markErrorLogSeen();
     badge.textContent = '';
     openBtn.classList.remove('has-errors');
+    // '방금 전' 같은 상대 시각만 제자리에서 갱신한다(카드는 다시 그리지 않음).
+    clearInterval(timeTimer);
+    timeTimer = setInterval(refreshTimes, 30_000);
   }
 
   function close() {
     isOpen = false;
     overlay.classList.remove('open');
+    clearTimeout(loadTimer);
+    clearInterval(timeTimer);
     // 다음에 열 때 '새 항목' 표시 기준을 지금으로 맞춘다.
     seenAt = Date.now();
   }
 
-  async function load(resetSeen) {
-    const log = await getErrorLog();
+  // 비동기 로드가 겹쳐 늦게 끝난 옛 결과가 새 결과를 덮어쓰지 않게 한다.
+  let loadSeq = 0;
+  async function load(initial) {
+    const seq = ++loadSeq;
+    const [log, blocks] = await Promise.all([getErrorLog(), getActiveBlocks()]);
+    if (seq !== loadSeq) return;
     entries = log.entries;
-    if (resetSeen) seenAt = log.seenAt;
-    await renderBanner();
-    render();
+    if (initial) seenAt = log.seenAt;
+    renderBanner(blocks);
+    render(initial);
   }
 
-  async function renderBanner() {
-    const blocks = await getActiveBlocks();
-    if (blocks.length === 0) {
-      banner.hidden = true;
-      banner.innerHTML = '';
-      return;
+  // 내용이 같으면 DOM 을 건드리지 않는다(높이·위치가 흔들리지 않게).
+  const lastHtml = new WeakMap();
+  function setHtml(el, html) {
+    if (lastHtml.get(el) !== html) {
+      el.innerHTML = html;
+      lastHtml.set(el, html);
     }
-    banner.hidden = false;
-    banner.innerHTML = blocks.map(b => `${ICONS.lock}<span>${escapeHtml(t('log.blockedBanner', {
+  }
+
+  function renderBanner(blocks) {
+    banner.hidden = blocks.length === 0;
+    setHtml(banner, blocks.map(b => `${ICONS.lock}<span>${escapeHtml(t('log.blockedBanner', {
       provider: `${PROVIDER_NAMES[b.provider] || b.provider} · ${b.model}`,
       time: formatResumeTime(b.until),
-    }))}</span>`).join('');
+    }))}</span>`).join(''));
   }
 
-  function render() {
+  // 카드 id → { el, version }. 새 로그가 와도 기존 카드는 그대로 두고, 바뀐 카드만 고치고,
+  // 새 카드만 등장 애니메이션을 준다(전체를 다시 그리면 모든 카드가 깜빡이고 스크롤·펼친 상세가 초기화된다).
+  const cards = new Map();
+
+  function render(initial) {
     const errors = entries.filter(e => kindOf(e) === 'error').length;
     const warns = entries.length - errors;
     count.textContent = t('log.count', { total: entries.length });
     copyBtn.disabled = entries.length === 0;
     clearBtn.disabled = entries.length === 0;
 
-    summary.innerHTML = entries.length === 0 ? '' : [
+    setHtml(summary, entries.length === 0 ? '' : [
       errors ? `<span class="log-sum-chip is-error"><i></i>${escapeHtml(t('log.summaryErrors', { count: errors }))}</span>` : '',
       warns ? `<span class="log-sum-chip is-warn"><i></i>${escapeHtml(t('log.summaryWarns', { count: warns }))}</span>` : '',
-    ].join('');
+    ].join(''));
 
     if (entries.length === 0) {
-      list.innerHTML = `<div class="cache-empty log-empty">${ICONS.ok}<span>${escapeHtml(t('log.empty'))}</span><small>${escapeHtml(t('log.emptySub'))}</small></div>`;
+      cards.clear();
+      setHtml(list, `<div class="cache-empty log-empty">${ICONS.ok}<span>${escapeHtml(t('log.empty'))}</span><small>${escapeHtml(t('log.emptySub'))}</small></div>`);
       return;
     }
+    // 빈 상태 화면이 떠 있었으면 걷어낸다(카드는 아래에서 개별로 붙인다).
+    if (lastHtml.get(list)) {
+      list.innerHTML = '';
+      lastHtml.delete(list);
+    }
 
-    list.innerHTML = entries.map((e, i) => renderCard(e, i)).join('');
-    list.scrollTop = 0;
+    // 스크롤해서 보고 있던 카드가 새 카드 추가 뒤에도 같은 자리에 보이도록 기준 카드를 기억한다.
+    const anchor = list.scrollTop > 0
+      ? [...cards.values()].map(c => c.el).find(el => el.offsetTop + el.offsetHeight > list.scrollTop)
+      : null;
+    const anchorOffset = anchor ? anchor.offsetTop - list.scrollTop : 0;
+
+    const alive = new Set(entries.map(e => e.id));
+    for (const [id, c] of cards) {
+      if (!alive.has(id)) {
+        c.el.remove();
+        cards.delete(id);
+      }
+    }
+
+    let prev = null;
+    entries.forEach((e, i) => {
+      const version = `${e.ts}|${e.count || 1}|${e.ts > seenAt}`;
+      let c = cards.get(e.id);
+      if (!c) {
+        const el = document.createElement('article');
+        el.addEventListener('animationend', () => el.classList.remove('is-entering'), { once: true });
+        el.classList.add('is-entering');
+        el.style.animationDelay = initial ? `${Math.min(i, 9) * 30}ms` : '0ms';
+        fillCard(el, e);
+        c = { el, version };
+        cards.set(e.id, c);
+      } else if (c.version !== version) {
+        fillCard(c.el, e); // 반복 횟수·시각만 바뀐 카드는 제자리에서 갱신(애니메이션 없음)
+        c.version = version;
+      }
+      const ref = prev ? prev.nextSibling : list.firstChild;
+      if (c.el !== ref) list.insertBefore(c.el, ref);
+      prev = c.el;
+    });
+
+    if (anchor && anchor.isConnected) list.scrollTop = anchor.offsetTop - anchorOffset;
+    else if (initial) list.scrollTop = 0;
   }
 
-  function renderCard(e, index) {
+  /** 카드 내용을 채운다. 펼쳐 둔 '상세'는 갱신 후에도 펼친 상태를 유지한다. */
+  function fillCard(el, e) {
     const kind = kindOf(e);
     const isNew = e.ts > seenAt;
+    const wasOpen = el.querySelector('details')?.open;
+    const entering = el.classList.contains('is-entering');
+    el.className = `log-card is-${kind}${isNew ? ' is-new' : ''}${entering ? ' is-entering' : ''}`;
+    el.innerHTML = cardInner(e, kind, isNew);
+    if (wasOpen) {
+      const d = el.querySelector('details');
+      if (d) d.open = true;
+    }
+  }
+
+  function cardInner(e, kind, isNew) {
     const lecture = [e.section, e.lecture].filter(Boolean).join(' › ') || t('log.noLecture');
 
     const chips = [`<span class="log-chip log-chip--code">${escapeHtml(e.code)}</span>`];
+    if (e.count > 1) chips.push(`<span class="log-chip log-chip--count">${escapeHtml(t('log.repeated', { count: e.count }))}</span>`);
     if (e.provider) {
       chips.push(`<span class="log-chip">${escapeHtml(`${PROVIDER_NAMES[e.provider] || e.provider}${e.model ? ` · ${e.model}` : ''}`)}</span>`);
     }
@@ -180,19 +259,24 @@ export function initErrorLogDialog({
       : '';
 
     return `
-      <article class="log-card is-${kind}${isNew ? ' is-new' : ''}" style="animation-delay:${Math.min(index, 9) * 30}ms">
         <div class="log-card-ic">${ICONS[kind]}</div>
         <div class="log-card-main">
           <div class="log-card-top">
             <span class="log-card-title">${isNew ? '<span class="log-new-dot"></span>' : ''}${escapeHtml(codeLabel(e.code))}</span>
-            <time class="log-card-time" title="${attr(absoluteTime(e.ts))}">${escapeHtml(relativeTime(e.ts))}</time>
+            <time class="log-card-time" data-ts="${e.ts}" title="${attr(absoluteTime(e.ts))}">${escapeHtml(relativeTime(e.ts))}</time>
           </div>
           <div class="log-card-lecture" title="${attr(lecture)}">${escapeHtml(lecture)}</div>
           <div class="log-card-meta">${chips.join('')}</div>
           ${hint !== hintKey ? `<p class="log-card-hint">${escapeHtml(hint)}</p>` : ''}
           ${detail}
-        </div>
-      </article>`;
+        </div>`;
+  }
+
+  function refreshTimes() {
+    list.querySelectorAll('time[data-ts]').forEach(el => {
+      const text = relativeTime(Number(el.dataset.ts));
+      if (el.textContent !== text) el.textContent = text;
+    });
   }
 
   /** 다른 사람에게 그대로 붙여넣을 수 있는 텍스트 형식 */
@@ -208,6 +292,7 @@ export function initErrorLogDialog({
         e.durationMs && `duration=${e.durationMs}ms`,
         e.waitMs && `wait=${e.waitMs}ms`,
         e.retryAfterMs && `retryAfter=${e.retryAfterMs}ms`,
+        e.count > 1 && `repeated=${e.count}`,
       ].filter(Boolean).join(' ');
       const lecture = [e.course, e.section, e.lecture].filter(Boolean).join(' › ');
       return [head, fields, lecture && `lecture: ${lecture}`, e.message && `message: ${e.message}`]
