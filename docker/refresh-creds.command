@@ -99,7 +99,7 @@ if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
     docker run -d \
       --name "$CONTAINER" \
-      --restart unless-stopped \
+      --restart always \
       -p "$PORT:3456" \
       -v "$(pwd)/$CRED_FILE:/root/.claude/.credentials.json" \
       "$IMAGE" >/dev/null
@@ -109,7 +109,7 @@ else
   echo "      -> 컨테이너가 없어 새로 실행합니다."
   docker run -d \
     --name "$CONTAINER" \
-    --restart unless-stopped \
+    --restart always \
     -p "$PORT:3456" \
     -v "$(pwd)/$CRED_FILE:/root/.claude/.credentials.json" \
     "$IMAGE" >/dev/null

@@ -22,16 +22,27 @@ echo "========================================"
 echo "  Claude Code 프록시 서버 (Docker)"
 echo "========================================"
 
-# 1) Keychain 에서 OAuth 토큰 추출
-echo "[1/3] Keychain 에서 claude 로그인 토큰 추출..."
+ENV_FILE="$SECRET_DIR/claude.env"
+
+# 1) 인증: 장기 토큰(docker/secrets/claude.env, 1년 유효)이 있으면 그것을 쓰고,
+#    없으면 Keychain 의 로그인 토큰을 추출해 마운트한다.
+#    장기 토큰 만들기: `claude setup-token` 실행 → 표시된 토큰으로
+#      echo "CLAUDE_CODE_OAUTH_TOKEN=<토큰>" > docker/secrets/claude.env && chmod 600 docker/secrets/claude.env
 mkdir -p "$SECRET_DIR"
-if ! security find-generic-password -s "Claude Code-credentials" -w > "$CRED_FILE" 2>/dev/null; then
-  echo "ERROR: Keychain 에서 'Claude Code-credentials' 를 찾지 못했습니다." >&2
-  echo "       호스트에서 'claude' 로그인이 되어 있는지 확인하세요." >&2
-  exit 1
+if [ -f "$ENV_FILE" ]; then
+  echo "[1/3] 장기 토큰 사용 ($ENV_FILE)"
+  AUTH_ARGS=(--env-file "$(pwd)/$ENV_FILE")
+else
+  echo "[1/3] Keychain 에서 claude 로그인 토큰 추출..."
+  if ! security find-generic-password -s "Claude Code-credentials" -w > "$CRED_FILE" 2>/dev/null; then
+    echo "ERROR: Keychain 에서 'Claude Code-credentials' 를 찾지 못했습니다." >&2
+    echo "       호스트에서 'claude' 로그인이 되어 있는지 확인하세요." >&2
+    exit 1
+  fi
+  chmod 600 "$CRED_FILE"
+  echo "      -> $CRED_FILE 저장 완료"
+  AUTH_ARGS=(-v "$(pwd)/$CRED_FILE:/root/.claude/.credentials.json")
 fi
-chmod 600 "$CRED_FILE"
-echo "      -> $CRED_FILE 저장 완료"
 
 # 2) 이미지 빌드
 echo "[2/3] 이미지 빌드... (최초 1회만 오래 걸립니다)"
@@ -42,15 +53,15 @@ echo "[3/3] 컨테이너 실행..."
 # 기존 컨테이너 정리
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
-# --restart unless-stopped : 재부팅/데몬 재시작 시 컨테이너 자동 복구.
+# --restart always : 재부팅/데몬 재시작 시 컨테이너 자동 복구.
 #   (Docker Desktop 이 로그인 시 자동 시작되도록 함께 설정해야 완성됨)
 # -d : 백그라운드 실행 → 이 창을 닫아도 서버는 계속 동작.
-# credentials 는 읽기/쓰기 마운트해 토큰 자동 갱신이 호스트에도 반영되도록 함.
+# credentials 를 쓸 때는 읽기/쓰기 마운트해 토큰 자동 갱신이 호스트에도 반영되도록 함.
 docker run -d \
   --name "$CONTAINER" \
-  --restart unless-stopped \
+  --restart always \
   -p "$PORT:3456" \
-  -v "$(pwd)/$CRED_FILE:/root/.claude/.credentials.json" \
+  "${AUTH_ARGS[@]}" \
   "$IMAGE" >/dev/null
 
 echo "      -> 컨테이너 기동 중..."

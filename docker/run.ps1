@@ -50,8 +50,15 @@ if (-not $dockerDaemonOk) {
     exit 1
 }
 
-# 1) 호스트 자격증명 파일 자동 탐색 + 복사
-Write-Host '[1/3] claude 로그인 자격증명 확보...'
+# 1) 인증
+#    장기 토큰(docker\secrets\claude.env — setup-token.bat 으로 발급, 1년 유효)이 있으면 그것을 쓴다.
+#    없으면 예전처럼 호스트 로그인 자격증명 파일을 복사해 마운트한다(로그인 만료 시 다시 실행 필요).
+$EnvFile = Join-Path $SecretDir 'claude.env'
+$useToken = Test-Path $EnvFile
+if ($useToken) {
+    Write-Host '[1/3] 장기 토큰 사용 (docker\secrets\claude.env)'
+} else {
+Write-Host '[1/3] claude 로그인 자격증명 확보... (장기 토큰을 쓰려면 docker\setup-token.bat 실행)'
 
 # claude CLI 설치 여부(진단용). Docker 방식은 컨테이너 안 claude 를 쓰므로 호스트 claude 가
 # 없어도 "자격증명 파일"만 있으면 되지만, 파일이 없을 때 안내를 정확히 하기 위해 확인한다.
@@ -124,6 +131,7 @@ if (-not $reuseExisting) {
     Copy-Item -Path $src -Destination $CredFile -Force
     Write-Host "      -> $CredFile 저장 완료"
 }
+}
 
 # 2) 이미지 빌드
 Write-Host '[2/3] 이미지 빌드... (최초 1회만 오래 걸립니다)'
@@ -143,15 +151,21 @@ $ErrorActionPreference = 'Continue'
 docker rm -f $Container 2>&1 | Out-Null
 $ErrorActionPreference = $prevEAP
 
-# credentials 절대경로. Windows 절대경로(C:\...)의 드라이브 콜론과 -v 구분자 콜론이
-# 겹치지만 Docker Desktop 이 드라이브 문자를 인식한다. 마운트 실패 시 windows-setup.md 의
-# 대안(포워드 슬래시) 참고.
-$credAbs = (Resolve-Path $CredFile).Path
+# 인증 인자: 장기 토큰은 환경 변수 파일로, 아니면 credentials 파일 마운트.
+# (credentials 절대경로의 드라이브 콜론과 -v 구분자 콜론이 겹치지만 Docker Desktop 이 드라이브
+#  문자를 인식한다. 마운트 실패 시 windows-setup.md 의 대안(포워드 슬래시) 참고.)
+if ($useToken) {
+    $authArgs = @('--env-file', (Resolve-Path $EnvFile).Path)
+} else {
+    $credAbs = (Resolve-Path $CredFile).Path
+    $authArgs = @('-v', "${credAbs}:/root/.claude/.credentials.json")
+}
+# --restart always: Docker Desktop 이 뜰 때(재부팅 후 자동 시작 포함) 컨테이너도 항상 함께 뜬다.
 docker run -d `
     --name $Container `
-    --restart unless-stopped `
+    --restart always `
     -p "${Port}:3456" `
-    -v "${credAbs}:/root/.claude/.credentials.json" `
+    @authArgs `
     $Image | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Write-Host 'ERROR: 컨테이너 실행 실패' -ForegroundColor Red

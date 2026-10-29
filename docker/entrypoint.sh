@@ -3,10 +3,14 @@ set -e
 
 CRED="$HOME/.claude/.credentials.json"
 
-# 인증 파일이 없으면 명확히 안내하고 종료
-if [ ! -f "$CRED" ]; then
+# 인증: 장기 토큰(CLAUDE_CODE_OAUTH_TOKEN, `claude setup-token` 으로 발급)이 있으면 그것을 쓴다.
+# 없으면 마운트된 로그인 자격증명 파일이 있어야 한다.
+if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+  echo "(container) auth: long-lived token (CLAUDE_CODE_OAUTH_TOKEN)"
+elif [ ! -f "$CRED" ]; then
   echo "ERROR: 인증 파일이 없습니다: $CRED" >&2
-  echo "       docker/run.command 를 실행하면 호스트 Keychain 에서 토큰을 추출해 마운트합니다." >&2
+  echo "       docker/setup-token.bat(Windows) 로 장기 토큰을 발급하거나," >&2
+  echo "       docker/run.command(macOS) 로 호스트 로그인을 마운트하세요." >&2
   exit 1
 fi
 

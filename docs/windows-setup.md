@@ -55,9 +55,25 @@ powershell -ExecutionPolicy Bypass -File .\docs\start-proxy.ps1
 powershell -ExecutionPolicy Bypass -File .\docker\run.ps1
 ```
 
-- `%USERPROFILE%\.claude\.credentials.json`을 `docker\secrets\`로 복사한 뒤 그 사본을 컨테이너에 마운트해 "내 로컬 로그인"을 그대로 사용합니다. (호스트에서 다시 로그인했다면 `run.ps1`을 다시 실행해야 갱신됩니다.)
-- 백그라운드(`-d`)로 실행되어 창을 닫아도 서버가 유지되고, 재부팅 시 Docker Desktop과 함께 자동으로 다시 뜹니다.
+- `docker\secrets\claude.env`(장기 토큰)가 있으면 그 토큰으로 인증합니다. 없으면 `%USERPROFILE%\.claude\.credentials.json`을 `docker\secrets\`로 복사한 뒤 그 사본을 컨테이너에 마운트해 "내 로컬 로그인"을 그대로 사용합니다. (이 경우 호스트에서 다시 로그인했다면 `run.ps1`을 다시 실행해야 갱신됩니다.)
+- 백그라운드(`-d`)·`--restart always`로 실행되어 창을 닫아도 서버가 유지되고, Docker Desktop이 뜰 때마다 함께 다시 뜹니다.
 - 중지: `docker stop claude-proxy` / 로그: `docker logs -f claude-proxy`
+
+### 장기 토큰(1년)으로 인증하기 — 권장
+
+로그인 파일을 마운트하는 방식은 호스트 로그인이 만료되면 프록시도 멈춥니다. 1년짜리 토큰을 쓰면 그동안 다시 설정할 필요가 없습니다.
+
+**`docker\setup-token.bat` 더블클릭**
+
+1. 브라우저가 열리면 Claude 계정으로 로그인·승인합니다. (Pro / Max / Team / Enterprise 구독 필요)
+2. 창에 표시된 토큰(`sk-ant-oat…`)을 복사해 붙여넣습니다. (입력 내용은 화면에 보이지 않습니다)
+3. 토큰이 `docker\secrets\claude.env`에 저장되고(git 에 올라가지 않음), 프록시가 그 토큰으로 다시 뜹니다.
+
+1년 뒤 만료되면 같은 방법으로 다시 발급하세요. 토큰은 모델 요청만 할 수 있습니다.
+
+### 재부팅 후 자동 실행
+
+컨테이너는 `--restart always`라 Docker Desktop만 뜨면 자동으로 함께 뜹니다. Docker Desktop이 Windows 로그인 시 시작되도록 **Docker Desktop → Settings → General → "Start Docker Desktop when you sign in to your computer"** 를 켜 두세요.
 
 ### `exec /usr/local/bin/entrypoint.sh: no such file or directory` 가 반복될 때
 
