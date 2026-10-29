@@ -19,43 +19,88 @@ export function clearCaptionCache() {
   translationMapCache.clear();
 }
 
+// 캡션 요소별로 마지막에 써 넣은 { original, translated } — 우리가 쓴 번역을
+// 다음 원문으로 오인하지 않고, 표시 모드 전환 시 원문을 복원하는 데 쓴다.
+const appliedText = new WeakMap();
+
+// Udemy(React)가 소유한 텍스트 노드들(.caption-original 안은 제외).
+function ownTextNodes(captionEl) {
+  const nodes = [];
+  const walker = document.createTreeWalker(captionEl, NodeFilter.SHOW_TEXT, {
+    acceptNode: n => n.parentElement?.closest('.caption-original')
+      ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  });
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  return nodes;
+}
+
+// React 텍스트 노드를 교체(textContent/innerHTML)하면 React 는 떨어져 나간 옛 노드에
+// 다음 큐를 써서 화면 자막이 첫 번역에 멈춘다. 그래서 노드는 그대로 두고 nodeValue 만 바꾼다.
+// 값이 같으면 쓰지 않는다 — 불필요한 변이가 observer 를 다시 깨우는 루프를 막는다.
+function writeCaption(captionEl, nodes, mainText, subText) {
+  nodes.forEach((n, i) => {
+    const v = i === 0 ? mainText : '';
+    if (n.nodeValue !== v) n.nodeValue = v;
+  });
+  let origLine = captionEl.querySelector('.caption-original');
+  if (subText) {
+    if (!origLine) {
+      origLine = document.createElement('div');
+      origLine.className = 'caption-original';
+      captionEl.appendChild(origLine);
+    }
+    if (origLine.textContent !== subText) origLine.textContent = subText;
+  } else if (origLine) {
+    origLine.remove();
+  }
+}
+
 // === 캡션 텍스트를 번역으로 치환 ===
 export function replaceCaptionText(captionEl) {
   if (!captionEl) return;
-  if (currentStyle.displayMode === 'original') { hideBadge(); return; }
 
-  const subSpan = captionEl.querySelector('.caption-original');
-  const originalText = subSpan
-    ? captionEl.childNodes[0]?.textContent?.trim() || captionEl.textContent.trim()
-    : captionEl.textContent.trim();
+  const nodes = ownTextNodes(captionEl);
+  // 대본/VTT 키와 같은 정규화(공백·줄바꿈 → 공백 1개) — 여러 줄 큐도 번역을 찾게 한다
+  const raw = nodes.map(n => n.nodeValue).join('').replace(/\s+/g, ' ').trim();
+  const applied = appliedText.get(captionEl);
+  // 아직 우리가 쓴 번역이 그대로면 원문은 기록해 둔 것, 아니면 React 가 새 큐를 쓴 것
+  const originalText = applied && raw === applied.translated ? applied.original : raw;
   if (!originalText) return;
+
+  if (currentStyle.displayMode === 'original') {
+    hideBadge();
+    if (applied && raw === applied.translated) {
+      withObserverPaused(() => writeCaption(captionEl, nodes, originalText, null));
+    }
+    appliedText.delete(captionEl);
+    return;
+  }
 
   const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
   if (!translated) {
     // 번역 없음: 원본이 이미 목표 언어면(백그라운드 스킵 대상, 예: 한국어 자막 → 한국어)
     // '번역 중' 배지를 숨기고, 아직 번역 전인 외국어면 배지를 표시한 채 원본을 유지한다.
+    if (applied && raw === applied.translated) {
+      withObserverPaused(() => writeCaption(captionEl, nodes, originalText, null));
+    }
+    appliedText.delete(captionEl);
     if (isAlreadyTargetLanguage(originalText, getActiveLang())) hideBadge();
     else showBadge(captionEl);
     return;
   }
 
   showBadge(captionEl);
+  withObserverPaused(() => {
+    writeCaption(captionEl, nodes, translated,
+      currentStyle.displayMode === 'both' ? originalText : null);
+  });
+  appliedText.set(captionEl, { original: originalText, translated });
+}
 
-  // observer를 일시 중지하여 자기 트리거 루프 방지
+// observer를 일시 중지하여 자기 트리거 루프 방지
+function withObserverPaused(fn) {
   if (captionObserver) captionObserver.disconnect();
-
-  if (currentStyle.displayMode === 'both') {
-    captionEl.innerHTML = '';
-    captionEl.appendChild(document.createTextNode(translated));
-    const origLine = document.createElement('div');
-    origLine.className = 'caption-original';
-    origLine.textContent = originalText;
-    captionEl.appendChild(origLine);
-  } else {
-    captionEl.textContent = translated;
-  }
-
-  // observer 재연결
+  fn();
   if (captionObserver && currentCaptionEl) {
     captionObserver.observe(currentCaptionEl, {
       childList: true, characterData: true, subtree: true

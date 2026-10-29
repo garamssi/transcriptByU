@@ -624,33 +624,71 @@
   function clearCaptionCache() {
     translationMapCache.clear();
   }
+  var appliedText = /* @__PURE__ */ new WeakMap();
+  function ownTextNodes(captionEl) {
+    const nodes = [];
+    const walker = document.createTreeWalker(captionEl, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => n.parentElement?.closest(".caption-original") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+    });
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    return nodes;
+  }
+  function writeCaption(captionEl, nodes, mainText, subText) {
+    nodes.forEach((n, i) => {
+      const v = i === 0 ? mainText : "";
+      if (n.nodeValue !== v) n.nodeValue = v;
+    });
+    let origLine = captionEl.querySelector(".caption-original");
+    if (subText) {
+      if (!origLine) {
+        origLine = document.createElement("div");
+        origLine.className = "caption-original";
+        captionEl.appendChild(origLine);
+      }
+      if (origLine.textContent !== subText) origLine.textContent = subText;
+    } else if (origLine) {
+      origLine.remove();
+    }
+  }
   function replaceCaptionText(captionEl) {
     if (!captionEl) return;
+    const nodes = ownTextNodes(captionEl);
+    const raw = nodes.map((n) => n.nodeValue).join("").replace(/\s+/g, " ").trim();
+    const applied = appliedText.get(captionEl);
+    const originalText = applied && raw === applied.translated ? applied.original : raw;
+    if (!originalText) return;
     if (currentStyle.displayMode === "original") {
       hideBadge();
+      if (applied && raw === applied.translated) {
+        withObserverPaused(() => writeCaption(captionEl, nodes, originalText, null));
+      }
+      appliedText.delete(captionEl);
       return;
     }
-    const subSpan = captionEl.querySelector(".caption-original");
-    const originalText = subSpan ? captionEl.childNodes[0]?.textContent?.trim() || captionEl.textContent.trim() : captionEl.textContent.trim();
-    if (!originalText) return;
     const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
     if (!translated) {
+      if (applied && raw === applied.translated) {
+        withObserverPaused(() => writeCaption(captionEl, nodes, originalText, null));
+      }
+      appliedText.delete(captionEl);
       if (isAlreadyTargetLanguage(originalText, getActiveLang())) hideBadge();
       else showBadge(captionEl);
       return;
     }
     showBadge(captionEl);
+    withObserverPaused(() => {
+      writeCaption(
+        captionEl,
+        nodes,
+        translated,
+        currentStyle.displayMode === "both" ? originalText : null
+      );
+    });
+    appliedText.set(captionEl, { original: originalText, translated });
+  }
+  function withObserverPaused(fn) {
     if (captionObserver) captionObserver.disconnect();
-    if (currentStyle.displayMode === "both") {
-      captionEl.innerHTML = "";
-      captionEl.appendChild(document.createTextNode(translated));
-      const origLine = document.createElement("div");
-      origLine.className = "caption-original";
-      origLine.textContent = originalText;
-      captionEl.appendChild(origLine);
-    } else {
-      captionEl.textContent = translated;
-    }
+    fn();
     if (captionObserver && currentCaptionEl) {
       captionObserver.observe(currentCaptionEl, {
         childList: true,
@@ -979,6 +1017,7 @@
       proxyUrl: "Proxy server URL",
       save: "Save",
       saved: "Saved!",
+      invalidKey: "Invalid characters in key \u2014 re-enter in English mode",
       retranslate: "Re-translate",
       retranslating: "Re-translating...",
       retranslateDone: "{count} re-translated!",
@@ -1130,6 +1169,7 @@
       proxyUrl: "\uD504\uB85D\uC2DC \uC11C\uBC84 URL",
       save: "\uC800\uC7A5",
       saved: "\uC800\uC7A5 \uC644\uB8CC!",
+      invalidKey: "\uD0A4\uC5D0 \uD55C\uAE00 \uB4F1 \uC798\uBABB\uB41C \uBB38\uC790\uAC00 \uC788\uC5B4\uC694 \u2014 \uC601\uBB38 \uC785\uB825\uC73C\uB85C \uB2E4\uC2DC \uC785\uB825",
       retranslate: "\uC7AC\uBC88\uC5ED",
       retranslating: "\uC7AC\uBC88\uC5ED \uC911...",
       retranslateDone: "{count}\uAC74 \uC7AC\uBC88\uC5ED \uC644\uB8CC!",
@@ -1281,6 +1321,7 @@
       proxyUrl: "\u30D7\u30ED\u30AD\u30B7\u30B5\u30FC\u30D0\u30FCURL",
       save: "\u4FDD\u5B58",
       saved: "\u4FDD\u5B58\u3057\u307E\u3057\u305F\uFF01",
+      invalidKey: "\u30AD\u30FC\u306B\u7121\u52B9\u306A\u6587\u5B57\u304C\u3042\u308A\u307E\u3059 \u2014 \u534A\u89D2\u82F1\u6570\u5B57\u3067\u518D\u5165\u529B",
       retranslate: "\u518D\u7FFB\u8A33",
       retranslating: "\u518D\u7FFB\u8A33\u4E2D...",
       retranslateDone: "{count}\u4EF6\u3092\u518D\u7FFB\u8A33\u3057\u307E\u3057\u305F\uFF01",
