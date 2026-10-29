@@ -4,7 +4,7 @@ import {
   initPanelFinder, scheduleTranslation, removeAllTranslations,
   applyDisplayModeAll, retranslateAll, getLectureContext,
 } from './src/presentation/content/transcript-manager.js';
-import { initCaptionFinder } from './src/presentation/content/caption-manager.js';
+import { initCaptionFinder, refreshCaption } from './src/presentation/content/caption-manager.js';
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
 import { initVttBridge, setActiveLang, onRequestStatus, resetFailures, currentLectureKey } from './src/presentation/content/vtt-bridge.js';
 import { setBadgeEnabled, setBadgeLang, setBadgeError } from './src/presentation/content/badge-manager.js';
@@ -54,6 +54,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     loadStyle().then(() => {
       updateDynamicStyles();
       applyDisplayModeAll();
+      refreshCaption();
     });
   }
 });

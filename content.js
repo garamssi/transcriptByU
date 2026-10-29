@@ -641,6 +641,7 @@
     translationMapCache.clear();
   }
   var appliedText = /* @__PURE__ */ new WeakMap();
+  var normalize = (s) => s.replace(/\s+/g, " ").trim();
   function ownTextNodes(captionEl) {
     const nodes = [];
     const walker = document.createTreeWalker(captionEl, NodeFilter.SHOW_TEXT, {
@@ -650,10 +651,12 @@
     return nodes;
   }
   function writeCaption(captionEl, nodes, mainText, subText) {
-    nodes.forEach((n, i) => {
-      const v = i === 0 ? mainText : "";
-      if (n.nodeValue !== v) n.nodeValue = v;
-    });
+    if (mainText != null) {
+      nodes.forEach((n, i) => {
+        const v = i === 0 ? mainText : "";
+        if (n.nodeValue !== v) n.nodeValue = v;
+      });
+    }
     let origLine = captionEl.querySelector(".caption-original");
     if (subText) {
       if (!origLine) {
@@ -669,24 +672,26 @@
   function replaceCaptionText(captionEl) {
     if (!captionEl) return;
     const nodes = ownTextNodes(captionEl);
-    const raw = nodes.map((n) => n.nodeValue).join("").replace(/\s+/g, " ").trim();
+    const raw = normalize(nodes.map((n) => n.nodeValue).join(""));
     const applied = appliedText.get(captionEl);
-    const originalText = applied && raw === applied.translated ? applied.original : raw;
-    if (!originalText) return;
+    const ours = !!applied && raw === applied.translated;
+    const originalText = ours ? applied.original : raw;
+    const restore = () => {
+      withObserverPaused(() => writeCaption(captionEl, nodes, ours ? originalText : null, null));
+      appliedText.delete(captionEl);
+    };
+    if (!originalText) {
+      restore();
+      return;
+    }
     if (currentStyle.displayMode === "original") {
       hideBadge();
-      if (applied && raw === applied.translated) {
-        withObserverPaused(() => writeCaption(captionEl, nodes, originalText, null));
-      }
-      appliedText.delete(captionEl);
+      restore();
       return;
     }
     const translated = translationMapCache.get(originalText) || getVttTranslation(originalText);
     if (!translated) {
-      if (applied && raw === applied.translated) {
-        withObserverPaused(() => writeCaption(captionEl, nodes, originalText, null));
-      }
-      appliedText.delete(captionEl);
+      restore();
       if (isAlreadyTargetLanguage(originalText, getActiveLang())) hideBadge();
       else showBadge(captionEl);
       return;
@@ -700,7 +705,10 @@
         currentStyle.displayMode === "both" ? originalText : null
       );
     });
-    appliedText.set(captionEl, { original: originalText, translated });
+    appliedText.set(captionEl, { original: originalText, translated: normalize(translated) });
+  }
+  function refreshCaption() {
+    if (currentCaptionEl) replaceCaptionText(currentCaptionEl);
   }
   function withObserverPaused(fn) {
     if (captionObserver) captionObserver.disconnect();
@@ -1516,6 +1524,7 @@
       loadStyle().then(() => {
         updateDynamicStyles();
         applyDisplayModeAll();
+        refreshCaption();
       });
     }
   });

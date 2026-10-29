@@ -23,6 +23,9 @@ export function clearCaptionCache() {
 // 다음 원문으로 오인하지 않고, 표시 모드 전환 시 원문을 복원하는 데 쓴다.
 const appliedText = new WeakMap();
 
+// 대본/VTT 키와 같은 정규화(공백·줄바꿈 → 공백 1개) — 여러 줄 큐도 번역을 찾게 한다
+const normalize = s => s.replace(/\s+/g, ' ').trim();
+
 // Udemy(React)가 소유한 텍스트 노드들(.caption-original 안은 제외).
 function ownTextNodes(captionEl) {
   const nodes = [];
@@ -37,11 +40,14 @@ function ownTextNodes(captionEl) {
 // React 텍스트 노드를 교체(textContent/innerHTML)하면 React 는 떨어져 나간 옛 노드에
 // 다음 큐를 써서 화면 자막이 첫 번역에 멈춘다. 그래서 노드는 그대로 두고 nodeValue 만 바꾼다.
 // 값이 같으면 쓰지 않는다 — 불필요한 변이가 observer 를 다시 깨우는 루프를 막는다.
+// mainText 가 null 이면 React 텍스트는 그대로 두고 원문 줄만 정리한다.
 function writeCaption(captionEl, nodes, mainText, subText) {
-  nodes.forEach((n, i) => {
-    const v = i === 0 ? mainText : '';
-    if (n.nodeValue !== v) n.nodeValue = v;
-  });
+  if (mainText != null) {
+    nodes.forEach((n, i) => {
+      const v = i === 0 ? mainText : '';
+      if (n.nodeValue !== v) n.nodeValue = v;
+    });
+  }
   let origLine = captionEl.querySelector('.caption-original');
   if (subText) {
     if (!origLine) {
@@ -60,19 +66,24 @@ export function replaceCaptionText(captionEl) {
   if (!captionEl) return;
 
   const nodes = ownTextNodes(captionEl);
-  // 대본/VTT 키와 같은 정규화(공백·줄바꿈 → 공백 1개) — 여러 줄 큐도 번역을 찾게 한다
-  const raw = nodes.map(n => n.nodeValue).join('').replace(/\s+/g, ' ').trim();
+  const raw = normalize(nodes.map(n => n.nodeValue).join(''));
   const applied = appliedText.get(captionEl);
   // 아직 우리가 쓴 번역이 그대로면 원문은 기록해 둔 것, 아니면 React 가 새 큐를 쓴 것
-  const originalText = applied && raw === applied.translated ? applied.original : raw;
-  if (!originalText) return;
+  const ours = !!applied && raw === applied.translated;
+  const originalText = ours ? applied.original : raw;
+
+  // 번역을 쓰지 않는 경로: 우리가 쓴 번역이 남아 있으면 원문으로 되돌리고,
+  // React 가 새 큐를 썼으면 그 텍스트는 두고 이전 큐의 원문 줄만 지운다.
+  const restore = () => {
+    withObserverPaused(() => writeCaption(captionEl, nodes, ours ? originalText : null, null));
+    appliedText.delete(captionEl);
+  };
+
+  if (!originalText) { restore(); return; }
 
   if (currentStyle.displayMode === 'original') {
     hideBadge();
-    if (applied && raw === applied.translated) {
-      withObserverPaused(() => writeCaption(captionEl, nodes, originalText, null));
-    }
-    appliedText.delete(captionEl);
+    restore();
     return;
   }
 
@@ -80,10 +91,7 @@ export function replaceCaptionText(captionEl) {
   if (!translated) {
     // 번역 없음: 원본이 이미 목표 언어면(백그라운드 스킵 대상, 예: 한국어 자막 → 한국어)
     // '번역 중' 배지를 숨기고, 아직 번역 전인 외국어면 배지를 표시한 채 원본을 유지한다.
-    if (applied && raw === applied.translated) {
-      withObserverPaused(() => writeCaption(captionEl, nodes, originalText, null));
-    }
-    appliedText.delete(captionEl);
+    restore();
     if (isAlreadyTargetLanguage(originalText, getActiveLang())) hideBadge();
     else showBadge(captionEl);
     return;
@@ -94,7 +102,13 @@ export function replaceCaptionText(captionEl) {
     writeCaption(captionEl, nodes, translated,
       currentStyle.displayMode === 'both' ? originalText : null);
   });
-  appliedText.set(captionEl, { original: originalText, translated });
+  // 읽을 때 정규화하므로 비교용으로도 정규화해 저장한다 (전각·연속 공백이 든 번역 대비)
+  appliedText.set(captionEl, { original: originalText, translated: normalize(translated) });
+}
+
+// 표시 모드 변경 시 다음 큐를 기다리지 않고 현재 자막을 바로 다시 칠한다.
+export function refreshCaption() {
+  if (currentCaptionEl) replaceCaptionText(currentCaptionEl);
 }
 
 // observer를 일시 중지하여 자기 트리거 루프 방지
