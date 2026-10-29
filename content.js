@@ -931,9 +931,12 @@
   }
 
   // src/presentation/content/caption-manager.js
-  var captionObserver = null;
   var captionFinderObserver = null;
   var currentCaptionEl = null;
+  var OBSERVE_OPTS = { childList: true, characterData: true, subtree: true };
+  var captionObserver = new MutationObserver(() => {
+    if (currentCaptionEl) replaceCaptionText(currentCaptionEl);
+  });
   var translationMapCache = /* @__PURE__ */ new Map();
   function updateCaptionCache(original, translated) {
     translationMapCache.set(original, translated);
@@ -1032,29 +1035,16 @@
     if (currentCaptionEl) replaceCaptionText(currentCaptionEl);
   }
   function withObserverPaused(fn) {
-    if (captionObserver) captionObserver.disconnect();
+    captionObserver.disconnect();
     fn();
-    if (captionObserver && currentCaptionEl) {
-      captionObserver.observe(currentCaptionEl, {
-        childList: true,
-        characterData: true,
-        subtree: true
-      });
-    }
+    if (currentCaptionEl) captionObserver.observe(currentCaptionEl, OBSERVE_OPTS);
   }
   function observeCaption(captionEl) {
-    if (currentCaptionEl === captionEl && captionObserver) return;
-    if (captionObserver) captionObserver.disconnect();
+    if (currentCaptionEl === captionEl) return;
     currentCaptionEl = captionEl;
+    captionObserver.disconnect();
+    captionObserver.observe(captionEl, OBSERVE_OPTS);
     replaceCaptionText(captionEl);
-    captionObserver = new MutationObserver(() => {
-      replaceCaptionText(captionEl);
-    });
-    captionObserver.observe(captionEl, {
-      childList: true,
-      characterData: true,
-      subtree: true
-    });
   }
   document.addEventListener("vtt-translations-ready", () => {
     if (currentCaptionEl) replaceCaptionText(currentCaptionEl);
@@ -1080,8 +1070,9 @@
     });
   }
   function cleanup() {
-    if (captionObserver) captionObserver.disconnect();
+    captionObserver.disconnect();
     if (captionFinderObserver) captionFinderObserver.disconnect();
+    captionFinderObserver = null;
     currentCaptionEl = null;
     removeBadge();
   }

@@ -4,9 +4,17 @@ import { currentStyle } from './style-manager.js';
 import { getVttTranslation, getActiveLang } from './vtt-bridge.js';
 import { showBadge, hideBadge, removeBadge } from './badge-manager.js';
 
-let captionObserver = null;
 let captionFinderObserver = null;
 let currentCaptionEl = null;
+
+// 캡션 감시자는 하나만 두고 감시 대상만 바꿔 붙인다. 콜백은 특정 요소에 묶지 않고 항상 현재 요소를 칠한다.
+// (예전엔 요소마다 새 감시자를 만들었는데, 강의 이동 후 옛 감시자가 withObserverPaused 로 새 요소에
+//  다시 붙어 '사라진 옛 요소'를 칠하고, 그 과정의 disconnect 로 새 감시자의 기록까지 버려
+//  영상 자막이 영어로 남았다.)
+const OBSERVE_OPTS = { childList: true, characterData: true, subtree: true };
+const captionObserver = new MutationObserver(() => {
+  if (currentCaptionEl) replaceCaptionText(currentCaptionEl);
+});
 
 // === 번역 맵 캐시: applyTranslation() 시점에 업데이트, DOM 스캔 불필요 ===
 const translationMapCache = new Map();
@@ -140,34 +148,20 @@ export function refreshCaption() {
 
 // observer를 일시 중지하여 자기 트리거 루프 방지
 function withObserverPaused(fn) {
-  if (captionObserver) captionObserver.disconnect();
+  captionObserver.disconnect();
   fn();
-  if (captionObserver && currentCaptionEl) {
-    captionObserver.observe(currentCaptionEl, {
-      childList: true, characterData: true, subtree: true
-    });
-  }
+  if (currentCaptionEl) captionObserver.observe(currentCaptionEl, OBSERVE_OPTS);
 }
 
 // === 캡션 요소에 MutationObserver 부착 ===
 function observeCaption(captionEl) {
-  if (currentCaptionEl === captionEl && captionObserver) return;
-
-  if (captionObserver) captionObserver.disconnect();
+  if (currentCaptionEl === captionEl) return;
+  // 감시 대상을 먼저 바꾼 뒤 칠한다(칠하는 동안의 일시 정지·재개가 새 요소 기준으로 이뤄지게).
   currentCaptionEl = captionEl;
-
+  captionObserver.disconnect();
+  captionObserver.observe(captionEl, OBSERVE_OPTS);
   // 배지 표시/숨김은 replaceCaptionText 가 일원 관리 (번역 모드·번역 유무·같은 언어 반영)
   replaceCaptionText(captionEl);
-
-  captionObserver = new MutationObserver(() => {
-    replaceCaptionText(captionEl);
-  });
-
-  captionObserver.observe(captionEl, {
-    childList: true,
-    characterData: true,
-    subtree: true
-  });
 }
 
 // VTT 번역이 준비되면(네트워크 캡처 완료) 현재 표시 중인 캡션을 즉시 다시 칠한다.
@@ -206,8 +200,9 @@ export function initCaptionFinder() {
 
 // === Observer 정리 (네비게이션 시 호출) ===
 export function cleanup() {
-  if (captionObserver) captionObserver.disconnect();
+  captionObserver.disconnect();
   if (captionFinderObserver) captionFinderObserver.disconnect();
+  captionFinderObserver = null;
   currentCaptionEl = null;
   removeBadge();
 }
