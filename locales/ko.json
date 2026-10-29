@@ -74,7 +74,7 @@
   "badge": {
     "translatingTo": "{lang} 번역 중",
     "translatingProgress": "{lang} 번역 중 {percent}%",
-    "done": "✓ {lang} 번역 완료",
+    "done": "{lang} 번역 완료",
     "partial": "{lang} 번역 완료 · {failed}문장 실패",
     "error": {
       "RATE_LIMIT": "요청 한도 · 잠시 후 재시도",

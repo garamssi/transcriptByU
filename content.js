@@ -1423,7 +1423,7 @@
     badge: {
       translatingTo: "Translating to {lang}",
       translatingProgress: "Translating to {lang} {percent}%",
-      done: "\u2713 {lang} translation complete",
+      done: "{lang} translation complete",
       partial: "{lang} done \xB7 {failed} sentences failed",
       error: {
         RATE_LIMIT: "Rate limited \xB7 retrying soon",
@@ -1579,7 +1579,7 @@
     badge: {
       translatingTo: "{lang} \uBC88\uC5ED \uC911",
       translatingProgress: "{lang} \uBC88\uC5ED \uC911 {percent}%",
-      done: "\u2713 {lang} \uBC88\uC5ED \uC644\uB8CC",
+      done: "{lang} \uBC88\uC5ED \uC644\uB8CC",
       partial: "{lang} \uBC88\uC5ED \uC644\uB8CC \xB7 {failed}\uBB38\uC7A5 \uC2E4\uD328",
       error: {
         RATE_LIMIT: "\uC694\uCCAD \uD55C\uB3C4 \xB7 \uC7A0\uC2DC \uD6C4 \uC7AC\uC2DC\uB3C4",
@@ -1735,7 +1735,7 @@
     badge: {
       translatingTo: "{lang}\u306B\u7FFB\u8A33\u4E2D",
       translatingProgress: "{lang}\u306B\u7FFB\u8A33\u4E2D {percent}%",
-      done: "\u2713 {lang}\u306E\u7FFB\u8A33\u5B8C\u4E86",
+      done: "{lang}\u306E\u7FFB\u8A33\u5B8C\u4E86",
       partial: "{lang}\u306E\u7FFB\u8A33\u5B8C\u4E86 \xB7 {failed}\u6587\u5931\u6557",
       error: {
         RATE_LIMIT: "\u30EA\u30AF\u30A8\u30B9\u30C8\u5236\u9650 \xB7 \u307E\u3082\u306A\u304F\u518D\u8A66\u884C",
