@@ -13,6 +13,7 @@ function assertValidModel(model) {
 // 프롬프트는 모든 플랫폼에서 stdin 으로 전달한다. 강의 전체 대본이 들어가 프롬프트가
 // 커지면 argv 한 인자의 길이 제한(Linux 128KB 등)에 걸리고, argv 는 프로세스 목록에도 노출된다.
 // - Windows: claude.cmd 실행을 위해 shell:true (프롬프트가 argv 에 없어 인젝션 위험 없음)
+// - 자막 번역엔 깊은 추론이 필요 없어 API 경로(claude-client.js)와 같이 effort 를 low 로 고정한다.
 function buildClaudeInvocation({ prompt, model, isWindows, timeout }) {
   assertValidModel(model);
   const modelArgs = model ? ['--model', model] : [];
@@ -21,7 +22,7 @@ function buildClaudeInvocation({ prompt, model, isWindows, timeout }) {
 
   return {
     command: 'claude',
-    args: ['-p', ...modelArgs],
+    args: ['-p', '--effort', 'low', ...modelArgs],
     options,
     stdinInput: prompt,
   };
