@@ -46,8 +46,7 @@
     "use": "사용",
     "none": "없음",
     "udemyDefault": "유데미 기본",
-    "preview": "미리보기",
-    "previewText": "번역된 자막 미리보기"
+    "preview": "미리보기"
   },
   "cache": {
     "title": "캐시",

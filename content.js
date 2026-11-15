@@ -1395,8 +1395,7 @@
       use: "On",
       none: "None",
       udemyDefault: "Udemy default",
-      preview: "Preview",
-      previewText: "Translated subtitle preview"
+      preview: "Preview"
     },
     cache: {
       title: "Cache",
@@ -1551,8 +1550,7 @@
       use: "\uC0AC\uC6A9",
       none: "\uC5C6\uC74C",
       udemyDefault: "\uC720\uB370\uBBF8 \uAE30\uBCF8",
-      preview: "\uBBF8\uB9AC\uBCF4\uAE30",
-      previewText: "\uBC88\uC5ED\uB41C \uC790\uB9C9 \uBBF8\uB9AC\uBCF4\uAE30"
+      preview: "\uBBF8\uB9AC\uBCF4\uAE30"
     },
     cache: {
       title: "\uCE90\uC2DC",
@@ -1707,8 +1705,7 @@
       use: "\u4F7F\u7528",
       none: "\u306A\u3057",
       udemyDefault: "Udemy\u30C7\u30D5\u30A9\u30EB\u30C8",
-      preview: "\u30D7\u30EC\u30D3\u30E5\u30FC",
-      previewText: "\u7FFB\u8A33\u5B57\u5E55\u306E\u30D7\u30EC\u30D3\u30E5\u30FC"
+      preview: "\u30D7\u30EC\u30D3\u30E5\u30FC"
     },
     cache: {
       title: "\u30AD\u30E3\u30C3\u30B7\u30E5",

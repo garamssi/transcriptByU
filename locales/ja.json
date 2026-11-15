@@ -46,8 +46,7 @@
     "use": "使用",
     "none": "なし",
     "udemyDefault": "Udemyデフォルト",
-    "preview": "プレビュー",
-    "previewText": "翻訳字幕のプレビュー"
+    "preview": "プレビュー"
   },
   "cache": {
     "title": "キャッシュ",

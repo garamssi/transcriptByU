@@ -4,6 +4,7 @@ import { t, applyI18n, setLocale, getLocale } from '../../shared/i18n.js';
 import { LANGUAGES, TARGET_CODES, UI_CODES, resolveCode } from '../../domain/languages.js';
 import { getActiveBlocks, formatResumeTime } from './error-log-dialog.js';
 import { sanitizeApiKey, hasInvalidKeyChars } from '../../domain/api-error.js';
+import { setPreviewLang } from './style-preview.js';
 
 /**
  * 설정 UI를 초기화한다.
@@ -75,6 +76,7 @@ export async function initSettingsController($, updatePreview) {
   targetLangSelect.innerHTML = TARGET_CODES.map(c => `<option value="${c}">${LANGUAGES[c].endonym}</option>`).join('');
   const targetCode = resolveCode(stored[STORAGE_KEYS.TARGET_LANG]);
   targetLangSelect.value = targetCode;
+  setPreviewLang($('stylePreview'), targetCode);
   if (stored[STORAGE_KEYS.TARGET_LANG] !== targetCode) {
     await chrome.storage.local.set({ [STORAGE_KEYS.TARGET_LANG]: targetCode }); // 레거시 엔도님 → 코드 정규화
   }
@@ -250,6 +252,7 @@ export async function initSettingsController($, updatePreview) {
   });
 
   targetLangSelect.addEventListener('change', async () => {
+    setPreviewLang($('stylePreview'), targetLangSelect.value);
     await chrome.storage.local.set({ [STORAGE_KEYS.TARGET_LANG]: targetLangSelect.value });
   });
 

@@ -46,8 +46,7 @@
     "use": "On",
     "none": "None",
     "udemyDefault": "Udemy default",
-    "preview": "Preview",
-    "previewText": "Translated subtitle preview"
+    "preview": "Preview"
   },
   "cache": {
     "title": "Cache",
