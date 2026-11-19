@@ -3,7 +3,9 @@ import { t, getLocale } from '../../shared/i18n.js';
 import { API_BLOCK_KEY, ERROR_LOG_KEY } from '../../domain/constants.js';
 import { getErrorLog, markErrorLogSeen, clearErrorLog } from '../../infrastructure/chrome/error-log.js';
 
-const PROVIDER_NAMES = { claude: 'Claude', gemini: 'Gemini', 'claude-code': 'Claude Code' };
+// 'Claude'(API 키)와 'Claude Code'(로컬 프록시)가 헷갈리지 않게 API 경로는 'API' 를 붙인다.
+const PROVIDER_NAMES = { claude: 'Claude API', gemini: 'Gemini API', 'claude-code': 'Claude Code' };
+const providerName = (p) => PROVIDER_NAMES[p] || p;
 
 const ICONS = {
   error: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
@@ -20,10 +22,17 @@ const attr = (s) => escapeHtml(s).replace(/"/g, '&quot;');
 
 const seconds = (ms) => (ms / 1000).toFixed(ms < 10_000 ? 1 : 0);
 
-function codeLabel(code) {
-  const key = `log.code.${code}`;
-  const v = t(key);
-  return v === key ? code : v;
+/**
+ * 로그 문구 조회. Claude Code 는 같은 코드라도 뜻이 달라(AUTH = 키가 아니라 로그인 만료,
+ * SERVER = AI 서버가 아니라 CLI 실행 실패) 전용 문구가 있으면 그것을 쓴다. 없으면 null.
+ */
+function logText(kind, e) {
+  const keys = [e.provider === 'claude-code' && `log.claudeCode.${kind}.${e.code}`, `log.${kind}.${e.code}`];
+  for (const key of keys.filter(Boolean)) {
+    const v = t(key);
+    if (v !== key) return v;
+  }
+  return null;
 }
 
 function relativeTime(ts) {
@@ -169,7 +178,7 @@ export function initErrorLogDialog({
   function renderBanner(blocks) {
     banner.hidden = blocks.length === 0;
     setHtml(banner, blocks.map(b => `${ICONS.lock}<span>${escapeHtml(t('log.blockedBanner', {
-      provider: `${PROVIDER_NAMES[b.provider] || b.provider} · ${b.model}`,
+      provider: `${providerName(b.provider)} · ${b.model}`,
       time: formatResumeTime(b.until),
     }))}</span>`).join(''));
   }
@@ -267,9 +276,8 @@ export function initErrorLogDialog({
 
     const chips = [`<span class="log-chip log-chip--code">${escapeHtml(e.code)}</span>`];
     if (e.count > 1) chips.push(`<span class="log-chip log-chip--count">${escapeHtml(t('log.repeated', { count: e.count }))}</span>`);
-    if (e.provider) {
-      chips.push(`<span class="log-chip">${escapeHtml(`${PROVIDER_NAMES[e.provider] || e.provider}${e.model ? ` · ${e.model}` : ''}`)}</span>`);
-    }
+    // 어느 서비스로 보낸 요청인지는 제목에 적는다. 여기엔 모델만.
+    if (e.model) chips.push(`<span class="log-chip">${escapeHtml(e.model)}</span>`);
     if (e.failed && e.lines) chips.push(`<span class="log-chip">${escapeHtml(t('log.failedLines', { failed: e.failed, lines: e.lines }))}</span>`);
     else if (e.lines) chips.push(`<span class="log-chip">${escapeHtml(t('log.lines', { count: e.lines }))}</span>`);
     if (e.status) chips.push(`<span class="log-chip">HTTP ${escapeHtml(String(e.status))}</span>`);
@@ -279,8 +287,7 @@ export function initErrorLogDialog({
       chips.push(`<span class="log-chip">${escapeHtml(t('log.retryAfter', { sec: Math.ceil(e.retryAfterMs / 1000) }))}</span>`);
     }
 
-    const hintKey = `log.hint.${e.code}`;
-    const hint = t(hintKey);
+    const hint = logText('hint', e);
     const detail = e.message
       ? `<details class="log-card-detail"><summary>${escapeHtml(t('log.detail'))}</summary><pre>${escapeHtml(e.message)}</pre></details>`
       : '';
@@ -289,12 +296,12 @@ export function initErrorLogDialog({
         <div class="log-card-ic">${ICONS[kind]}</div>
         <div class="log-card-main">
           <div class="log-card-top">
-            <span class="log-card-title">${isNew ? '<span class="log-new-dot"></span>' : ''}${escapeHtml(codeLabel(e.code))}</span>
+            <span class="log-card-title">${isNew ? '<span class="log-new-dot"></span>' : ''}${escapeHtml(`${e.provider ? `${providerName(e.provider)} · ` : ''}${logText('code', e) || e.code}`)}</span>
             <time class="log-card-time" data-ts="${e.ts}" title="${attr(e.count > 1 && e.firstTs ? `${absoluteTime(e.firstTs)} ~ ${absoluteTime(e.ts)}` : absoluteTime(e.ts))}">${escapeHtml(relativeTime(e.ts))}</time>
           </div>
           <div class="log-card-lecture" title="${attr(lecture)}">${escapeHtml(lecture)}</div>
           <div class="log-card-meta">${chips.join('')}</div>
-          ${hint !== hintKey ? `<p class="log-card-hint">${escapeHtml(hint)}</p>` : ''}
+          ${hint ? `<p class="log-card-hint">${escapeHtml(hint)}</p>` : ''}
           ${detail}
         </div>`;
   }
@@ -309,7 +316,7 @@ export function initErrorLogDialog({
   /** 다른 사람에게 그대로 붙여넣을 수 있는 텍스트 형식 */
   function toPlainText() {
     return entries.map(e => {
-      const head = `[${new Date(e.ts).toISOString()}] ${e.level?.toUpperCase() || 'ERROR'} ${e.code}`;
+      const head = `[${new Date(e.ts).toISOString()}] ${e.level?.toUpperCase() || 'ERROR'} ${e.code}${e.provider ? ` (${providerName(e.provider)})` : ''}`;
       const fields = [
         e.provider && `provider=${e.provider}`,
         e.model && `model=${e.model}`,

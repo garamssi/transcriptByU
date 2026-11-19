@@ -55,8 +55,11 @@ function callClaude(prompt, model) {
 
     proc.on('close', (code) => {
       if (code !== 0) {
+        // claude -p 는 로그인 만료·사용 한도 같은 실패 사유를 stderr 가 아니라 stdout 에 쓰는 경우가 있다.
+        // stderr 만 보면 "CLI_EXIT_1: " 처럼 원인 없는 오류가 된다.
         const stderr = Buffer.concat(errChunks).toString().trim();
-        reject(new Error(`CLI_EXIT_${code}: ${stderr}`));
+        const stdout = Buffer.concat(chunks).toString().trim();
+        reject(new Error(`CLI_EXIT_${code}: ${(stderr || stdout || '(no output)').slice(0, 300)}`));
       } else {
         resolve(Buffer.concat(chunks).toString().trim());
       }

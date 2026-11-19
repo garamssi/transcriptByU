@@ -1,4 +1,4 @@
-import { ApiError, ERROR_CODES, redactSecrets } from '../../domain/api-error.js';
+import { ApiError, ERROR_CODES, redactSecrets, classifyClaudeCodeHttpError } from '../../domain/api-error.js';
 import { CLAUDE_CODE_TIMEOUT_MS } from '../../domain/constants.js';
 
 /**
@@ -20,16 +20,19 @@ export async function callClaudeCode(systemPrompt, userText, baseUrl, model) {
       signal: AbortSignal.timeout(CLAUDE_CODE_TIMEOUT_MS),
     });
   } catch (e) {
+    // 어느 주소로 보내다 실패했는지 로그에 남긴다(프록시 URL 설정 오류와 프록시 중단을 구분).
+    const detail = `POST ${url} — ${e?.name || 'Error'}: ${e?.message || e}`;
     if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
-      throw new ApiError(ERROR_CODES.TIMEOUT, { detail: e.message });
+      throw new ApiError(ERROR_CODES.TIMEOUT, { detail });
     }
-    throw new ApiError(ERROR_CODES.NOT_RUNNING, { detail: e?.message });
+    throw new ApiError(ERROR_CODES.NOT_RUNNING, { detail });
   }
 
   if (!response.ok) {
-    const detail = redactSecrets(await response.text()).slice(0, 500);
-    const code = response.status >= 500 ? ERROR_CODES.SERVER : ERROR_CODES.BAD_REQUEST;
-    throw new ApiError(code, { status: response.status, detail });
+    const body = redactSecrets(await response.text());
+    const err = classifyClaudeCodeHttpError(response.status, body);
+    err.detail = `POST ${url} — ${body}`.slice(0, 500);
+    throw err;
   }
 
   const data = await response.json();

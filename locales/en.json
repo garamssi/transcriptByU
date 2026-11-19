@@ -148,6 +148,16 @@
       "DISCONNECTED": "Lost connection to the extension. Retrying automatically.",
       "SLOW": "The response was slow. If this keeps happening, you may be near a rate limit.",
       "UNKNOWN": "An unexpected error occurred. See the details below."
+    },
+    "claudeCode": {
+      "code": {
+        "AUTH": "Login expired",
+        "SERVER": "Claude Code failed to run"
+      },
+      "hint": {
+        "AUTH": "The proxy's Claude Code login has expired. Log in to claude again in a terminal, then restart the proxy.",
+        "SERVER": "The proxy could not run the claude command. See the details below. Retrying automatically."
+      }
     }
   }
 }

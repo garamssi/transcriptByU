@@ -1497,6 +1497,16 @@
         DISCONNECTED: "Lost connection to the extension. Retrying automatically.",
         SLOW: "The response was slow. If this keeps happening, you may be near a rate limit.",
         UNKNOWN: "An unexpected error occurred. See the details below."
+      },
+      claudeCode: {
+        code: {
+          AUTH: "Login expired",
+          SERVER: "Claude Code failed to run"
+        },
+        hint: {
+          AUTH: "The proxy's Claude Code login has expired. Log in to claude again in a terminal, then restart the proxy.",
+          SERVER: "The proxy could not run the claude command. See the details below. Retrying automatically."
+        }
       }
     }
   };
@@ -1652,6 +1662,16 @@
         DISCONNECTED: "\uD655\uC7A5 \uD504\uB85C\uADF8\uB7A8\uACFC \uC5F0\uACB0\uC774 \uB04A\uACBC\uC5B4\uC694. \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694.",
         SLOW: "\uC751\uB2F5\uC774 \uB2A6\uAC8C \uC654\uC5B4\uC694. \uACC4\uC18D\uB418\uBA74 \uC694\uCCAD \uD55C\uB3C4\uC5D0 \uAC00\uAE4C\uC6CC\uC9C4 \uAC83\uC77C \uC218 \uC788\uC5B4\uC694.",
         UNKNOWN: "\uC608\uC0C1\uD558\uC9C0 \uBABB\uD55C \uC624\uB958\uC608\uC694. \uC0C1\uC138 \uBA54\uC2DC\uC9C0\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694."
+      },
+      claudeCode: {
+        code: {
+          AUTH: "\uB85C\uADF8\uC778 \uB9CC\uB8CC",
+          SERVER: "Claude Code \uC2E4\uD589 \uC2E4\uD328"
+        },
+        hint: {
+          AUTH: "\uD504\uB85D\uC2DC\uC758 Claude Code \uB85C\uADF8\uC778\uC774 \uB9CC\uB8CC\uB410\uC5B4\uC694. \uD130\uBBF8\uB110\uC5D0\uC11C claude \uC5D0 \uB2E4\uC2DC \uB85C\uADF8\uC778\uD55C \uB4A4 \uD504\uB85D\uC2DC\uB97C \uB2E4\uC2DC \uC2E4\uD589\uD574 \uC8FC\uC138\uC694.",
+          SERVER: "\uD504\uB85D\uC2DC\uAC00 claude \uBA85\uB839 \uC2E4\uD589\uC5D0 \uC2E4\uD328\uD588\uC5B4\uC694. \uC0C1\uC138 \uBA54\uC2DC\uC9C0\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694. \uC790\uB3D9\uC73C\uB85C \uB2E4\uC2DC \uC2DC\uB3C4\uD574\uC694."
+        }
       }
     }
   };
@@ -1807,6 +1827,16 @@
         DISCONNECTED: "\u62E1\u5F35\u6A5F\u80FD\u3068\u306E\u63A5\u7D9A\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002",
         SLOW: "\u5FDC\u7B54\u304C\u9045\u308C\u307E\u3057\u305F\u3002\u7D9A\u304F\u5834\u5408\u306F\u30EA\u30AF\u30A8\u30B9\u30C8\u4E0A\u9650\u306B\u8FD1\u3044\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059\u3002",
         UNKNOWN: "\u4E88\u671F\u3057\u306A\u3044\u30A8\u30E9\u30FC\u3067\u3059\u3002\u8A73\u7D30\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+      },
+      claudeCode: {
+        code: {
+          AUTH: "\u30ED\u30B0\u30A4\u30F3\u671F\u9650\u5207\u308C",
+          SERVER: "Claude Code \u306E\u5B9F\u884C\u306B\u5931\u6557"
+        },
+        hint: {
+          AUTH: "\u30D7\u30ED\u30AD\u30B7\u306E Claude Code \u30ED\u30B0\u30A4\u30F3\u304C\u671F\u9650\u5207\u308C\u3067\u3059\u3002\u30BF\u30FC\u30DF\u30CA\u30EB\u3067 claude \u306B\u518D\u30ED\u30B0\u30A4\u30F3\u3057\u3066\u304B\u3089\u3001\u30D7\u30ED\u30AD\u30B7\u3092\u518D\u8D77\u52D5\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+          SERVER: "\u30D7\u30ED\u30AD\u30B7\u304C claude \u30B3\u30DE\u30F3\u30C9\u3092\u5B9F\u884C\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u8A73\u7D30\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u81EA\u52D5\u3067\u518D\u8A66\u884C\u3057\u307E\u3059\u3002"
+        }
       }
     }
   };

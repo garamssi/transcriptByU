@@ -3,8 +3,15 @@ import assert from 'node:assert';
 import {
   ERROR_CODES as C, classifyGeminiHttpError, extractGeminiText, classifyClaudeHttpError,
   extractClaudeText, nextPacificMidnight, parseDurationMs, redactSecrets, isFatalCode,
-  sanitizeApiKey, hasInvalidKeyChars, fetchErrorCode, toApiError,
+  sanitizeApiKey, hasInvalidKeyChars, fetchErrorCode, toApiError, classifyClaudeCodeHttpError,
 } from '../src/domain/api-error.js';
+
+test('Claude Code 프록시 500: 로그인 만료는 AUTH(재시도 안 함), 그 외는 SERVER', () => {
+  const expired = classifyClaudeCodeHttpError(500, '{"error":"CLI_EXIT_1: OAuth session expired and could not be refreshed"}');
+  assert.strictEqual(expired.code, C.AUTH);
+  assert.ok(isFatalCode(expired.code));
+  assert.strictEqual(classifyClaudeCodeHttpError(500, '{"error":"CLI_EXIT_1: "}').code, C.SERVER);
+});
 
 const gemini429 = (quotaId, retryDelay = '43s') => JSON.stringify({
   error: {

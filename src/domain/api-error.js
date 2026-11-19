@@ -211,6 +211,19 @@ export function classifyClaudeHttpError(status, bodyText, retryAfter, now = Date
 }
 
 /**
+ * Claude Code 프록시 HTTP 오류를 분류한다. 프록시는 claude CLI 실패를 모두 500 으로 돌려주므로
+ * 본문(CLI 출력)으로 로그인 만료를 가려낸다 — 다시 보내도 같은 결과라 재시도하지 않게 AUTH 로 본다.
+ * @param {number} status
+ * @param {string} detail - 프록시 응답 본문
+ */
+export function classifyClaudeCodeHttpError(status, detail) {
+  if (/oauth|expired|log ?in|unauthorized|authenticat|invalid api key/i.test(detail || '')) {
+    return new ApiError(C.AUTH, { status, detail });
+  }
+  return new ApiError(status >= 500 ? C.SERVER : C.BAD_REQUEST, { status, detail });
+}
+
+/**
  * Claude Messages API 응답에서 텍스트를 꺼낸다.
  * thinking 블록이 앞에 올 수 있으므로 text 블록만 모은다.
  */
