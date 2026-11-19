@@ -72,6 +72,7 @@ Chromium 계열 브라우저(크롬, 엣지)에서 동작하며 Manifest V3 기�
 - Docker Desktop을 설치하고 실행한 뒤 `docker/run.command`를 더블클릭합니다.
 - 이 스크립트는 macOS 키체인에서 claude 로그인 토큰을 꺼내 `docker/secrets/credentials.json`으로 저장하고 이미지를 빌드한 다음(최초 1회는 오래 걸립니다), 컨테이너를 백그라운드로 띄웁니다. 창을 닫아도 유지되고 재부팅하면 Docker Desktop과 함께 다시 뜹니다.
 - 로그인 토큰이 만료되면 `docker/refresh-creds.command`를 실행해 갱신합니다.
+- 만료가 반복되는 게 번거로우면 `docker/setup-token.command`로 장기 토큰(1년)을 발급해 두면 됩니다. 발급·저장·프록시 재실행을 한 번에 처리합니다.
 - 중지는 `docker stop claude-proxy`, 로그는 `docker logs -f claude-proxy`.
 
 ### Windows
