@@ -85,6 +85,12 @@
       "generic": "Translation error · retrying"
     }
   },
+  "review": {
+    "title": "Enjoying the translations?",
+    "body": "A short review means a lot",
+    "write": "Write a review",
+    "never": "Don't show again"
+  },
   "model": {
     "tier": {
       "fastCheap": "fast / cheap",

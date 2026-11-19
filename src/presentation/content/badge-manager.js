@@ -51,12 +51,46 @@ function badgeText() {
 }
 
 function render() {
-  if (!badgeEl) return;
-  badgeEl.querySelector('.utb-text').textContent = badgeText();
-  const state = errorCode ? 'error' : progressState();
-  badgeEl.classList.toggle('utb-error', state === 'error');
-  badgeEl.classList.toggle('utb-done', state === 'done');
-  badgeEl.classList.toggle('utb-partial', state === 'partial');
+  if (badgeEl) {
+    badgeEl.querySelector('.utb-text').textContent = badgeText();
+    const state = errorCode ? 'error' : progressState();
+    badgeEl.classList.toggle('utb-error', state === 'error');
+    badgeEl.classList.toggle('utb-done', state === 'done');
+    badgeEl.classList.toggle('utb-partial', state === 'partial');
+  }
+  notifyDoneBadge();
+}
+
+// === '번역 완료' 배지가 화면에 보이는지 ===
+// 리뷰 요청 말풍선이 이 배지에 붙는다. 배지의 상태(진행률·오류)와 표시 여부가 바뀌는 곳은
+// 모두 이 모듈 안이므로, 바뀔 때마다 여기서 알린다(바깥에서 주기적으로 들여다볼 필요가 없다).
+const doneBadgeListeners = new Set();
+let lastDoneBadge = null;
+
+/**
+ * '번역 완료' 상태로 지금 화면에 보이는 배지 요소. 그렇지 않으면 null
+ * (번역 중·오류·일부 실패·숨김·제거 상태).
+ */
+export function doneBadge() {
+  const visible = badgeEl?.isConnected && badgeEl.style.display !== 'none';
+  return visible && !errorCode && progressState() === 'done' ? badgeEl : null;
+}
+
+/**
+ * '번역 완료' 배지가 나타나거나 사라질 때 알림을 받는다.
+ * @param {(badge: Element|null) => void} listener - badge: doneBadge() 값
+ */
+export function onDoneBadgeChange(listener) {
+  doneBadgeListeners.add(listener);
+}
+
+function notifyDoneBadge() {
+  const badge = doneBadge();
+  if (badge === lastDoneBadge) return;
+  lastDoneBadge = badge;
+  for (const l of doneBadgeListeners) {
+    try { l(badge); } catch (_) { /* 알림 실패는 배지에 영향 주지 않음 */ }
+  }
 }
 
 function build() {
@@ -112,10 +146,12 @@ export function showBadge(anchor) {
   if (!badgeEl) badgeEl = build();
   if (badgeEl.parentElement !== target) target.appendChild(badgeEl);
   badgeEl.style.display = 'inline-flex';
+  notifyDoneBadge();
 }
 
 export function hideBadge() {
   if (badgeEl) badgeEl.style.display = 'none';
+  notifyDoneBadge();
 }
 
 export function removeBadge() {
@@ -124,4 +160,5 @@ export function removeBadge() {
     badgeEl = null;
   }
   anchorEl = null;
+  notifyDoneBadge();
 }

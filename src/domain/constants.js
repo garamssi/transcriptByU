@@ -23,6 +23,8 @@ export const STORAGE_KEYS = {
   STYLE_PANEL_COLOR_ENABLED: 'stylePanelColorEnabled',
   STYLE_EXPANDED: 'styleExpanded',
   UI_LANG: 'uiLang',
+  REVIEW: 'reviewPrompt',
+  REVIEW_ANSWERED: 'reviewAnswered',
 };
 
 // === Cache ===

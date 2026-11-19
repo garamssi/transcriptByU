@@ -72,3 +72,93 @@
   box-shadow: 0 0 8px #fbbf24;
   animation: none;
 }
+
+/* ===== 리뷰 요청 말풍선 ('번역 완료' 배지 위 또는 아래) =====
+   배지의 자식 요소라 배지를 따라다니고 함께 숨는다(위치를 배지 크기에 맞춰 따로 적어 둘 필요가 없다).
+   기본은 배지 아래로 펴고, 아래 공간이 좁으면 .utr-up 으로 위로 편다(review-prompt.js 가 정한다).
+   색·모서리·버튼은 팝업(popup.css)의 카드·버튼과 맞추고, 영상 위에서도 글자가 읽히도록
+   배지보다 불투명한 바탕을 쓴다. */
+.udemy-translator-review {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  --utr-shift: -4px; /* 나타나고 사라질 때 살짝 움직이는 방향(배지 쪽) */
+  width: 248px;
+  padding: 13px 14px 12px;
+  border-radius: 15px;
+  background: rgba(12, 10, 20, 0.92);
+  border: 1px solid rgba(178, 107, 255, 0.5);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  font-family: "Pretendard", system-ui, -apple-system, sans-serif;
+  text-align: left;
+  /* 배지는 pointer-events:none 이지만(영상 클릭을 막지 않게) 말풍선의 버튼은 눌려야 한다. */
+  pointer-events: auto;
+  /* fill-mode 를 주지 않는다 — forwards/both 면 끝난 애니메이션이 opacity 를 붙잡아 사라지는 전환이 안 먹는다. */
+  animation: utr-in 220ms ease;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.udemy-translator-review.utr-up { top: auto; bottom: calc(100% + 10px); --utr-shift: 4px; }
+.udemy-translator-review.utr-leaving { opacity: 0; transform: translateY(var(--utr-shift)); }
+@keyframes utr-in { from { opacity: 0; transform: translateY(var(--utr-shift)); } }
+/* 남은 시간 고리 (오른쪽 위): 시계 방향으로 줄어들고, 다 줄어들면 말풍선이 사라진다(review-prompt.js).
+   마우스를 올린 동안은 그 자리에서 멈췄다가 떼면 이어서 줄어든다. */
+.udemy-translator-review .utr-ring {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg); /* 12시 방향에서 시작 */
+}
+.udemy-translator-review .utr-ring circle { fill: none; stroke-width: 2.5; }
+.udemy-translator-review .utr-ring-track { stroke: rgba(255, 255, 255, 0.12); }
+.udemy-translator-review .utr-ring-left {
+  stroke: #B26BFF;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  animation: utr-countdown var(--utr-life, 10s) linear forwards;
+}
+.udemy-translator-review:hover .utr-ring-left { animation-play-state: paused; }
+/* 음수 offset: 12시에서 시작한 빈 구간이 시계 방향으로 늘어난다(남은 부분이 시계 방향으로 줄어듦). */
+@keyframes utr-countdown { to { stroke-dashoffset: -100; } }
+.udemy-translator-review .utr-title {
+  margin: 0;
+  padding-right: 26px; /* 고리 자리 */
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #F4F2FA;
+}
+.udemy-translator-review .utr-body {
+  margin: 3px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(244, 242, 250, 0.55);
+}
+.udemy-translator-review .utr-actions { display: flex; gap: 7px; margin-top: 11px; }
+.udemy-translator-review .utr-btn {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font: 600 12px/1 "Pretendard", system-ui, -apple-system, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.udemy-translator-review .utr-btn:active { transform: scale(0.98); }
+.udemy-translator-review .utr-primary {
+  border: 0;
+  background: linear-gradient(90deg, #8B3DF5, #B26BFF);
+  color: #fff;
+}
+.udemy-translator-review .utr-primary:hover { filter: brightness(1.1); }
+.udemy-translator-review .utr-ghost {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(244, 242, 250, 0.55);
+}
+.udemy-translator-review .utr-ghost:hover { background: rgba(255, 255, 255, 0.08); color: #F4F2FA; }

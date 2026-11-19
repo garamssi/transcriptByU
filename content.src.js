@@ -6,8 +6,9 @@ import {
 } from './src/presentation/content/transcript-manager.js';
 import { initCaptionFinder, refreshCaption, getCaptionDebug, getCaptionCacheEntry } from './src/presentation/content/caption-manager.js';
 import { setupNavigationHandler } from './src/presentation/content/navigation-handler.js';
-import { initVttBridge, setActiveLang, onRequestStatus, resetFailures, currentLectureKey, onProgress, getDiagnostics } from './src/presentation/content/vtt-bridge.js';
+import { initVttBridge, setActiveLang, onRequestStatus, resetFailures, currentLectureKey, currentLectureId, onProgress, getDiagnostics } from './src/presentation/content/vtt-bridge.js';
 import { setBadgeEnabled, setBadgeLang, setBadgeError, setBadgeProgress } from './src/presentation/content/badge-manager.js';
+import { initReviewPrompt, onLectureTranslated } from './src/presentation/content/review-prompt.js';
 import { resolveCode } from './src/domain/languages.js';
 import en from './locales/en.json';
 import ko from './locales/ko.json';
@@ -81,7 +82,15 @@ onRequestStatus(({ key, error, failedCount, okCount }) => {
 });
 
 // === 강의 번역 진행률 → 배지 (번역 중 N% / 완료 / 일부 실패) ===
-onProgress(setBadgeProgress);
+onProgress((p) => {
+  setBadgeProgress(p);
+  // 강의 번역이 모두 끝나면 리뷰 요청 규칙에 '번역한 강의'로 기록한다.
+  // (원래 목표 언어라 번역할 게 없던 강의는 번역한 강의가 아니다 — translated 가 0)
+  if (p && p.done >= p.total && p.translated > 0) onLectureTranslated(currentLectureId());
+});
+
+// === 리뷰 요청 말풍선 ('번역 완료' 배지 아래) ===
+initReviewPrompt();
 
 // === 진단: 페이지 콘솔에서 window.postMessage({ type: 'UDEMY_TRANSLATOR_DIAG' }, '*') ===
 // 영상 자막이 원문으로 남는 등 실제 화면에서만 재현되는 문제의 원인을 데이터로 확인하기 위한 덤프.

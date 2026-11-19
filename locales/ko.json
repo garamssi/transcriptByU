@@ -85,6 +85,12 @@
       "generic": "번역 오류 · 재시도 중"
     }
   },
+  "review": {
+    "title": "잘 쓰고 계신가요?",
+    "body": "리뷰 한 줄이 큰 힘이 돼요",
+    "write": "리뷰 남기기",
+    "never": "다시 보지 않기"
+  },
   "model": {
     "tier": {
       "fastCheap": "빠름/저렴",

@@ -609,6 +609,39 @@ input[type="color"]::-webkit-color-swatch { border: none; }
 }
 .cache-badge:empty { display: none; }
 
+/* 바닥글: 버전(왼쪽) · 리뷰 남기기(오른쪽).
+   리뷰 버튼은 재번역 버튼과 같은 보라 테두리·바탕을 작은 알약 모양으로 쓰고, 별만 노란색으로 눈에 띄게 한다. */
+.app-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+.foot-ver {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.foot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(178,107,255,.35);
+  background: rgba(139,61,245,.1);
+  color: #cbb0ff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.foot-link svg { color: var(--warn); fill: currentColor; flex-shrink: 0; }
+.foot-link:hover { background: rgba(139,61,245,.2); border-color: rgba(178,107,255,.6); color: #fff; }
+.foot-link:active { transform: scale(.98); }
+
 /* ==========================================================================
    캐시 관리 모달 (다크)
    ========================================================================== */

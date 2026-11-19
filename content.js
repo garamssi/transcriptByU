@@ -23,7 +23,9 @@
     STYLE_PANEL_COLOR: "stylePanelColor",
     STYLE_PANEL_COLOR_ENABLED: "stylePanelColorEnabled",
     STYLE_EXPANDED: "styleExpanded",
-    UI_LANG: "uiLang"
+    UI_LANG: "uiLang",
+    REVIEW: "reviewPrompt",
+    REVIEW_ANSWERED: "reviewAnswered"
   };
   var L1_MAX_SIZE = 50;
   var MAX_SCRIPT_CHARS = 15e4;
@@ -419,17 +421,19 @@
     const bucket = buckets.get(key);
     const track = tracker.get(key);
     const units = new Set(entry.seg.units);
-    let done = 0, failed = 0, gaveUp = 0;
+    let done = 0, translated = 0, failed = 0, gaveUp = 0;
     for (const u of units) {
       const state = track?.get(u)?.state;
-      if (bucket?.has(u) || state === "done") done++;
+      if (bucket?.has(u)) {
+        done++;
+        translated++;
+      } else if (state === "done") done++;
       else if (state === "failed") failed++;
       else if (state === "gaveUp") gaveUp++;
     }
-    return { total: units.size, done, failed, gaveUp };
+    return { total: units.size, done, translated, failed, gaveUp };
   }
-  function emitProgress() {
-    const p = getProgress();
+  function emitProgress(p = getProgress()) {
     for (const l of progressListeners) {
       try {
         l(p);
@@ -804,7 +808,7 @@
     clearTimeout(retryTimer);
     retryTimer = null;
     lastCaptionIndex = 0;
-    emitProgress();
+    emitProgress(null);
   }
 
   // src/shared/i18n.js
@@ -873,12 +877,34 @@
     return t("badge.translatingTo", { lang: name });
   }
   function render() {
-    if (!badgeEl) return;
-    badgeEl.querySelector(".utb-text").textContent = badgeText();
-    const state = errorCode ? "error" : progressState();
-    badgeEl.classList.toggle("utb-error", state === "error");
-    badgeEl.classList.toggle("utb-done", state === "done");
-    badgeEl.classList.toggle("utb-partial", state === "partial");
+    if (badgeEl) {
+      badgeEl.querySelector(".utb-text").textContent = badgeText();
+      const state = errorCode ? "error" : progressState();
+      badgeEl.classList.toggle("utb-error", state === "error");
+      badgeEl.classList.toggle("utb-done", state === "done");
+      badgeEl.classList.toggle("utb-partial", state === "partial");
+    }
+    notifyDoneBadge();
+  }
+  var doneBadgeListeners = /* @__PURE__ */ new Set();
+  var lastDoneBadge = null;
+  function doneBadge() {
+    const visible = badgeEl?.isConnected && badgeEl.style.display !== "none";
+    return visible && !errorCode && progressState() === "done" ? badgeEl : null;
+  }
+  function onDoneBadgeChange(listener) {
+    doneBadgeListeners.add(listener);
+  }
+  function notifyDoneBadge() {
+    const badge = doneBadge();
+    if (badge === lastDoneBadge) return;
+    lastDoneBadge = badge;
+    for (const l of doneBadgeListeners) {
+      try {
+        l(badge);
+      } catch (_) {
+      }
+    }
   }
   function build() {
     const el = document.createElement("div");
@@ -918,9 +944,11 @@
     if (!badgeEl) badgeEl = build();
     if (badgeEl.parentElement !== target) target.appendChild(badgeEl);
     badgeEl.style.display = "inline-flex";
+    notifyDoneBadge();
   }
   function hideBadge() {
     if (badgeEl) badgeEl.style.display = "none";
+    notifyDoneBadge();
   }
   function removeBadge() {
     if (badgeEl) {
@@ -928,6 +956,7 @@
       badgeEl = null;
     }
     anchorEl = null;
+    notifyDoneBadge();
   }
 
   // src/presentation/content/caption-manager.js
@@ -1346,6 +1375,107 @@
     }
   }
 
+  // src/domain/review-prompt.js
+  var REVIEW_MILESTONES = [5, 10, 15];
+  function normalizeReviewState(raw) {
+    return {
+      lectures: Array.isArray(raw?.lectures) ? raw.lectures : [],
+      shown: Number.isInteger(raw?.shown) ? raw.shown : 0,
+      answered: raw?.answered === true
+    };
+  }
+  var isFinished = (state) => state.answered || state.shown >= REVIEW_MILESTONES.length;
+  var shouldPrompt = (state) => !isFinished(state) && state.lectures.length >= REVIEW_MILESTONES[state.shown];
+  function recordLecture(state, lectureId) {
+    if (!lectureId || isFinished(state) || shouldPrompt(state) || state.lectures.includes(lectureId)) return state;
+    return { ...state, lectures: [...state.lectures, lectureId] };
+  }
+  var markShown = (state) => ({ ...state, shown: state.shown + 1 });
+  var markAnswered = (state) => state.answered ? state : { ...state, answered: true };
+  var REVIEW_URL = "https://chromewebstore.google.com/detail/cijgikgpgjapgehkfeogenpegnppbama/reviews";
+
+  // src/infrastructure/chrome/review-store.js
+  async function getReviewState() {
+    const s = await chrome.storage.local.get([STORAGE_KEYS.REVIEW, STORAGE_KEYS.REVIEW_ANSWERED]);
+    return normalizeReviewState({ ...s[STORAGE_KEYS.REVIEW], answered: s[STORAGE_KEYS.REVIEW_ANSWERED] });
+  }
+  function saveReviewState({ lectures, shown, answered }) {
+    return chrome.storage.local.set({
+      [STORAGE_KEYS.REVIEW]: { lectures, shown },
+      ...answered && { [STORAGE_KEYS.REVIEW_ANSWERED]: true }
+    });
+  }
+
+  // src/presentation/content/review-prompt.js
+  var AUTO_HIDE_MS = 1e4;
+  var FADE_MS = 200;
+  var promptEl = null;
+  var finished = false;
+  var queue = Promise.resolve();
+  function update(transition) {
+    queue = queue.then(async () => {
+      const stored = await getReviewState();
+      const next = transition(stored);
+      if (next !== stored) await saveReviewState(next);
+      finished = isFinished(next);
+    }).catch((err) => console.warn("[UdemyTranslator] review prompt failed:", err?.message || err));
+    return queue;
+  }
+  var promptIfDue = (state) => shouldPrompt(state) && show() ? markShown(state) : state;
+  function initReviewPrompt() {
+    onDoneBadgeChange((badge) => {
+      if (!badge) hideReviewPrompt();
+      else if (!finished) update(promptIfDue);
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !finished && doneBadge()) update(promptIfDue);
+    });
+  }
+  function onLectureTranslated(lectureId) {
+    if (finished) return queue;
+    return update((state) => promptIfDue(recordLecture(state, lectureId)));
+  }
+  function show() {
+    const badge = doneBadge();
+    if (!badge || promptEl || document.visibilityState !== "visible") return false;
+    const el = document.createElement("div");
+    el.className = "udemy-translator-review";
+    el.setAttribute("role", "dialog");
+    el.style.setProperty("--utr-life", `${AUTO_HIDE_MS}ms`);
+    el.innerHTML = '<svg class="utr-ring" viewBox="0 0 20 20" aria-hidden="true"><circle class="utr-ring-track" cx="10" cy="10" r="8"/><circle class="utr-ring-left" cx="10" cy="10" r="8" pathLength="100"/></svg><p class="utr-title"></p><p class="utr-body"></p><div class="utr-actions"><button type="button" class="utr-btn utr-primary"></button><button type="button" class="utr-btn utr-ghost"></button></div>';
+    el.querySelector(".utr-title").textContent = t("review.title");
+    el.querySelector(".utr-body").textContent = t("review.body");
+    const [writeBtn, neverBtn] = el.querySelectorAll("button");
+    writeBtn.textContent = t("review.write");
+    neverBtn.textContent = t("review.never");
+    const answer = () => {
+      update(markAnswered);
+      hideReviewPrompt();
+    };
+    writeBtn.addEventListener("click", () => {
+      window.open(REVIEW_URL, "_blank", "noopener");
+      answer();
+    });
+    neverBtn.addEventListener("click", answer);
+    for (const type of ["click", "dblclick", "mousedown", "pointerdown"]) {
+      el.addEventListener(type, (e) => e.stopPropagation());
+    }
+    el.querySelector(".utr-ring-left").addEventListener("animationend", hideReviewPrompt);
+    const video = document.querySelector("video")?.getBoundingClientRect();
+    const at = badge.getBoundingClientRect();
+    el.classList.toggle("utr-up", !!video && video.bottom - at.bottom < at.top - video.top);
+    badge.appendChild(el);
+    promptEl = el;
+    return true;
+  }
+  function hideReviewPrompt() {
+    const el = promptEl;
+    if (!el) return;
+    promptEl = null;
+    el.classList.add("utr-leaving");
+    setTimeout(() => el.remove(), FADE_MS);
+  }
+
   // locales/en.json
   var en_default = {
     popup: {
@@ -1433,6 +1563,12 @@
         NO_API_KEY: "No API key",
         generic: "Translation error \xB7 retrying"
       }
+    },
+    review: {
+      title: "Enjoying the translations?",
+      body: "A short review means a lot",
+      write: "Write a review",
+      never: "Don't show again"
     },
     model: {
       tier: {
@@ -1599,6 +1735,12 @@
         generic: "\uBC88\uC5ED \uC624\uB958 \xB7 \uC7AC\uC2DC\uB3C4 \uC911"
       }
     },
+    review: {
+      title: "\uC798 \uC4F0\uACE0 \uACC4\uC2E0\uAC00\uC694?",
+      body: "\uB9AC\uBDF0 \uD55C \uC904\uC774 \uD070 \uD798\uC774 \uB3FC\uC694",
+      write: "\uB9AC\uBDF0 \uB0A8\uAE30\uAE30",
+      never: "\uB2E4\uC2DC \uBCF4\uC9C0 \uC54A\uAE30"
+    },
     model: {
       tier: {
         fastCheap: "\uBE60\uB984/\uC800\uB834",
@@ -1764,6 +1906,12 @@
         generic: "\u7FFB\u8A33\u30A8\u30E9\u30FC \xB7 \u518D\u8A66\u884C\u4E2D"
       }
     },
+    review: {
+      title: "\u304A\u5F79\u306B\u7ACB\u3063\u3066\u3044\u307E\u3059\u304B\uFF1F",
+      body: "\u3072\u3068\u3053\u3068\u30EC\u30D3\u30E5\u30FC\u304C\u5927\u304D\u306A\u52B1\u307F\u306B\u306A\u308A\u307E\u3059",
+      write: "\u30EC\u30D3\u30E5\u30FC\u3092\u66F8\u304F",
+      never: "\u4ECA\u5F8C\u8868\u793A\u3057\u306A\u3044"
+    },
     model: {
       tier: {
         fastCheap: "\u9AD8\u901F\u30FB\u4F4E\u30B3\u30B9\u30C8",
@@ -1899,7 +2047,11 @@
     if (error && error.code !== "PARSE_ERROR" && error.code !== "DISABLED") setBadgeError(error.code);
     else if (failedCount === 0 || okCount > 0) setBadgeError(null);
   });
-  onProgress(setBadgeProgress);
+  onProgress((p) => {
+    setBadgeProgress(p);
+    if (p && p.done >= p.total && p.translated > 0) onLectureTranslated(currentLectureId());
+  });
+  initReviewPrompt();
   window.addEventListener("message", (event) => {
     if (event.source !== window || event.data?.type !== "UDEMY_TRANSLATOR_DIAG") return;
     const norm = (s) => (s || "").replace(/\s+/g, " ").trim();

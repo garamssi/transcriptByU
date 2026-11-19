@@ -7,6 +7,7 @@ import ko from './locales/ko.json' with { type: 'json' };
 import ja from './locales/ja.json' with { type: 'json' };
 import { setCatalogs, setLocale, applyI18n } from './src/shared/i18n.js';
 import { STORAGE_KEYS } from './src/domain/constants.js';
+import { REVIEW_URL } from './src/domain/review-prompt.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,6 +55,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     copyBtn: $('logCopy'),
     copyText: $('logCopyText'),
     clearBtn: $('logClear'),
+  });
+
+  // 바닥글: 버전 표시 + 리뷰 페이지 링크. 언제든 자유롭게 가는 상시 링크라, 영상 위 리뷰 요청
+  // (말풍선)과는 별개다 — 여기서 눌러도 말풍선의 노출 여부는 바뀌지 않는다.
+  $('appVersion').textContent = `v${chrome.runtime.getManifest().version}`;
+  $('reviewLink').addEventListener('click', () => {
+    chrome.tabs.create({ url: REVIEW_URL });
   });
 
   // 설정 컨트롤러 초기화

@@ -59,14 +59,15 @@ export function setLectureScript(lines, source, times) {
 // === 강의 번역 진행률 (배지 표시용) ===
 const progressListeners = new Set();
 
-/** @param {(p: { total: number, done: number, failed: number, gaveUp: number } | null) => void} listener */
+/** @param {(p: { total: number, done: number, translated: number, failed: number, gaveUp: number } | null) => void} listener */
 export function onProgress(listener) {
   progressListeners.add(listener);
 }
 
 /**
  * 현재 강의의 번역 진행률. 대본(문장 단위)을 모르면 null.
- * done: 번역됐거나 이미 목표 언어라 건너뛴 단위, failed: 자동 재시도 대기, gaveUp: 재시도 포기
+ * done: 번역됐거나 이미 목표 언어라 건너뛴 단위, translated: 그중 실제로 번역이 있는 단위,
+ * failed: 자동 재시도 대기, gaveUp: 재시도 포기
  */
 export function getProgress(key = currentLectureKey()) {
   const entry = scriptEntry(key);
@@ -74,18 +75,18 @@ export function getProgress(key = currentLectureKey()) {
   const bucket = buckets.get(key);
   const track = tracker.get(key);
   const units = new Set(entry.seg.units);
-  let done = 0, failed = 0, gaveUp = 0;
+  let done = 0, translated = 0, failed = 0, gaveUp = 0;
   for (const u of units) {
     const state = track?.get(u)?.state;
-    if (bucket?.has(u) || state === 'done') done++;
+    if (bucket?.has(u)) { done++; translated++; }
+    else if (state === 'done') done++;
     else if (state === 'failed') failed++;
     else if (state === 'gaveUp') gaveUp++;
   }
-  return { total: units.size, done, failed, gaveUp };
+  return { total: units.size, done, translated, failed, gaveUp };
 }
 
-function emitProgress() {
-  const p = getProgress();
+function emitProgress(p = getProgress()) {
   for (const l of progressListeners) {
     try { l(p); } catch (_) { /* noop */ }
   }
@@ -211,7 +212,7 @@ export function currentLectureKey() {
 }
 
 /** URL 기반 강의 ID(코스 슬러그/강의 번호). 언어와 무관하다. */
-function currentLectureId() {
+export function currentLectureId() {
   const m = location.pathname.match(/\/course\/([^/]+)\/learn\/lecture\/(\d+)/);
   return m ? `${m[1]}/${m[2]}` : location.pathname;
 }
@@ -623,5 +624,7 @@ export function clearVttStore() {
   clearTimeout(retryTimer);
   retryTimer = null;
   lastCaptionIndex = 0;
-  emitProgress(); // 새 강의: 대본을 다시 잡기 전까지 진행률 없음(null)
+  // 새 강의: 대본을 다시 잡기 전까지 진행률 없음. 계산하지 않고 null 을 직접 알린다 —
+  // Navigation API 의 navigate 는 주소가 바뀌기 전에 오므로, 계산하면 떠나는 강의의 '완료'가 다시 나간다.
+  emitProgress(null);
 }
