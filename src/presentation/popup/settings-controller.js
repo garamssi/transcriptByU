@@ -212,7 +212,6 @@ export async function initSettingsController($, updatePreview) {
       // 붙여넣기에 섞인 공백·제로폭 문자는 제거한다. 한글 등 비 ASCII 가 남으면 HTTP 헤더에
       // 실을 수 없어 fetch 가 매 요청 실패하므로(ISO-8859-1 오류) 저장하지 않는다.
       const key = sanitizeApiKey(keyInput.value);
-      if (!key) return;
       if (hasInvalidKeyChars(key)) {
         saveStatus.textContent = t('popup.invalidKey');
         setTimeout(() => { saveStatus.textContent = ''; }, 3000);
@@ -221,7 +220,13 @@ export async function initSettingsController($, updatePreview) {
       keyInput.value = key;
 
       const storageKey = currentProvider === 'claude' ? STORAGE_KEYS.CLAUDE_API_KEY : STORAGE_KEYS.GEMINI_API_KEY;
-      await chrome.storage.local.set({ [storageKey]: key });
+      if (key) {
+        await chrome.storage.local.set({ [storageKey]: key });
+      } else {
+        // 빈 값으로 저장 = 키 삭제. 구버전 apiKey 를 남기면 다음 팝업 열 때 마이그레이션이 Claude 키를 되살린다.
+        const legacy = currentProvider === 'claude' ? [STORAGE_KEYS.API_KEY] : [];
+        await chrome.storage.local.remove([storageKey, ...legacy]);
+      }
     }
 
     saveKeyText.textContent = '';
