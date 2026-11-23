@@ -1,4 +1,4 @@
-# Udemy AI Translate
+# Udemy AI Translator
 
 Udemy 자막을 번역하는 크롬 확장. "Claude Code" 서비스는 로컬 프록시(`proxy-server/server.js`, 포트 3456)를 거쳐 `claude -p` 를 호출한다.
 
